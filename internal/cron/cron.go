@@ -20,6 +20,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/robfig/cron/v3"
+
+	"beacon/internal/db"
 )
 
 // Scheduler wraps a robfig cron with Beacon's entries.
@@ -39,6 +41,28 @@ func New(pool *pgxpool.Pool, logger *slog.Logger) *Scheduler {
 	// Every hour on the hour: sweep jobs stuck in 'running' (e.g. a worker died
 	// mid-job) back to 'pending' so they get retried, and log a heartbeat.
 	_, _ = s.c.AddFunc("@hourly", func() { s.sweep(context.Background()) })
+	// Ch 14 — daily housekeeping for the idempotency table. 24 hours is longer
+	// than any sane retry and short enough that the table stays small.
+	_, _ = s.c.AddFunc("@daily", func() { s.sweepIdempotencyKeys(context.Background()) })
+	return s
+}
+
+// WithBackups adds the Chapter 45 nightly off-provider dump. It enqueues a job
+// rather than dumping inline, so the dump runs in the worker pool with retries
+// and a dead-letter state like everything else. Called from the wiring step
+// only when backups are configured.
+//
+// 03:17, not 03:00: everybody's cron fires on the hour, and a backup competing
+// with every other nightly job for the same disk is slower than it needs to be.
+func (s *Scheduler) WithBackups() *Scheduler {
+	_, _ = s.c.AddFunc("17 3 * * *", func() {
+		if _, err := s.pool.Exec(context.Background(),
+			`INSERT INTO jobs (kind, payload) VALUES ('backup', '{}'::jsonb)`); err != nil {
+			s.logger.Error("cron enqueue backup failed", slog.Any("err", err))
+			return
+		}
+		s.logger.Info("cron enqueued nightly backup")
+	})
 	return s
 }
 
@@ -75,4 +99,18 @@ func (s *Scheduler) sweep(ctx context.Context) {
 		slog.Int64("requeued_stuck_jobs", tag.RowsAffected()),
 		slog.Int("pending_jobs", pending),
 	)
+}
+
+// sweepIdempotencyKeys deletes spent idempotency keys older than 24 hours.
+//
+// Course mapping: Chapter 14 — "a daily cron entry sweeps rows older than 24h."
+// The chapter's version enqueues a River job; ours runs the DELETE directly,
+// which is the same shape against this repo's queue.
+func (s *Scheduler) sweepIdempotencyKeys(ctx context.Context) {
+	n, err := db.New(s.pool).SweepIdempotencyKeys(ctx)
+	if err != nil {
+		s.logger.Error("cron idempotency sweep failed", slog.Any("err", err))
+		return
+	}
+	s.logger.Info("cron idempotency sweep", slog.Int64("deleted", n))
 }

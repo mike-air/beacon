@@ -13,6 +13,21 @@ import (
 type Querier interface {
 	ActiveWebhooksForEvent(ctx context.Context, arg ActiveWebhooksForEventParams) ([]Webhook, error)
 	AddMembership(ctx context.Context, arg AddMembershipParams) (Membership, error)
+	// Chapter 14 — idempotency. Two queries, and the first one is the whole trick.
+	//
+	// [verbatim ch14] except for the file's location: the chapter puts this at
+	// internal/http/idempotency_queries.sql behind a second sqlc target. This repo
+	// generates every query into one internal/db package (see sqlc.yaml), so it
+	// lives here with the rest. The SQL is unchanged.
+	// Atomic: insert the row if no key exists for this (user_id, key), or
+	// return the existing row if one does. The "claimed" boolean tells the
+	// caller which happened.
+	ClaimIdempotencyKey(ctx context.Context, arg ClaimIdempotencyKeyParams) (ClaimIdempotencyKeyRow, error)
+	CompleteIdempotencyKey(ctx context.Context, arg CompleteIdempotencyKeyParams) error
+	// How you actually read an experiment: join the assignment to whatever outcome
+	// you care about. This is the shape without the outcome, so the split itself
+	// can be sanity-checked first.
+	CountAssignmentsByVariant(ctx context.Context, experimentKey string) ([]CountAssignmentsByVariantRow, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
 	CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error)
 	CreateDelivery(ctx context.Context, arg CreateDeliveryParams) (uuid.UUID, error)
@@ -32,28 +47,71 @@ type Querier interface {
 	DeleteWebhook(ctx context.Context, arg DeleteWebhookParams) (int64, error)
 	FindUserIDByEmail(ctx context.Context, lower string) (uuid.UUID, error)
 	GetAttachmentByID(ctx context.Context, arg GetAttachmentByIDParams) (Attachment, error)
+	// Chapter 32 — experiments. The lookup is cached; the assignment insert is the
+	// audit trail and runs off the request's critical path.
+	//
+	// [verbatim ch32, expressed as the sqlc queries the chapter's service calls.]
+	GetExperiment(ctx context.Context, key string) (Experiment, error)
+	// Chapter 31 — feature flags. Two reads on the hot path, both cached for 30
+	// seconds; the rest are the admin surface.
+	//
+	// [verbatim ch31, expressed as the sqlc queries the chapter's service calls.]
+	GetFeatureFlag(ctx context.Context, name string) (FeatureFlag, error)
 	GetMembership(ctx context.Context, arg GetMembershipParams) (Membership, error)
 	GetProjectByID(ctx context.Context, arg GetProjectByIDParams) (Project, error)
+	// Chapter 30's write path loads the canonical row out of Postgres before
+	// pushing it to Meilisearch. Postgres is authoritative; Meili is a copy.
+	GetSearchDocument(ctx context.Context, arg GetSearchDocumentParams) (GetSearchDocumentRow, error)
 	GetTaskByID(ctx context.Context, arg GetTaskByIDParams) (Task, error)
 	GetUserByEmail(ctx context.Context, lower string) (GetUserByEmailRow, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error)
+	// Chapter 33 — the locale cascade's first two steps live in one row each.
+	// One query, because resolving a locale on every request must not be two.
+	GetUserPreferences(ctx context.Context, arg GetUserPreferencesParams) (GetUserPreferencesRow, error)
 	GetWebhook(ctx context.Context, id uuid.UUID) (Webhook, error)
 	GetWebhookByOrg(ctx context.Context, arg GetWebhookByOrgParams) (Webhook, error)
+	InsertAssignmentIfAbsent(ctx context.Context, arg InsertAssignmentIfAbsentParams) error
 	ListAttachmentsByTask(ctx context.Context, arg ListAttachmentsByTaskParams) ([]Attachment, error)
 	ListCommentsByTask(ctx context.Context, taskID uuid.UUID) ([]Comment, error)
+	ListFeatureFlagOverrides(ctx context.Context, flagName string) ([]FeatureFlagOverride, error)
+	ListFeatureFlags(ctx context.Context) ([]FeatureFlag, error)
 	ListMembers(ctx context.Context, orgID uuid.UUID) ([]ListMembersRow, error)
 	ListOrgsForUser(ctx context.Context, userID uuid.UUID) ([]ListOrgsForUserRow, error)
 	ListProjectsByOrg(ctx context.Context, arg ListProjectsByOrgParams) ([]Project, error)
+	// The batched full reindex (Chapter 30). Keyset pagination on the primary key
+	// so a reindex of a large org doesn't OFFSET its way into a slow crawl.
+	ListSearchDocuments(ctx context.Context, arg ListSearchDocumentsParams) ([]ListSearchDocumentsRow, error)
 	// A NULL status arg makes the status filter a no-op (any status).
 	ListTasksByProject(ctx context.Context, arg ListTasksByProjectParams) ([]Task, error)
 	ListWebhooksByOrg(ctx context.Context, orgID uuid.UUID) ([]Webhook, error)
 	MarkDeliveryStatus(ctx context.Context, arg MarkDeliveryStatusParams) error
 	MarkDeliverySuccess(ctx context.Context, arg MarkDeliverySuccessParams) error
+	// Chapter 29 — the tenant-scoped full-text query.
+	//
+	// Four functions carry it. plainto_tsquery turns the user's words into a
+	// tsquery safely (never glue strings into to_tsquery — that is SQL injection in
+	// a disguise). @@ is the match operator. ts_rank scores using the A/B/C weights
+	// the trigger set. ts_headline returns the matching slice of the body wrapped
+	// in <mark>, which is what makes a result look like a real search result.
+	//
+	// The WHERE clause starts with organization_id. That ordering is not
+	// cosmetic — it is the reason one tenant can never see another's rows.
+	//
+	// [verbatim ch29]
+	SearchOrg(ctx context.Context, arg SearchOrgParams) ([]SearchOrgRow, error)
+	SetExperimentStatus(ctx context.Context, arg SetExperimentStatusParams) error
+	SetFeatureFlagDefault(ctx context.Context, arg SetFeatureFlagDefaultParams) error
+	SetUserPreferences(ctx context.Context, arg SetUserPreferencesParams) error
+	// The daily cron entry: 24 hours is long enough for any sane retry and short
+	// enough that the table stays small (Chapter 14, the "housekeeping" section).
+	SweepIdempotencyKeys(ctx context.Context) (int64, error)
 	// Attachments — no org_id of their own; scoped by joining through tasks.org_id.
 	// (Chapter 8 / sqlc)
 	TaskInOrg(ctx context.Context, arg TaskInOrgParams) (bool, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error)
+	UpsertOrgFlagOverride(ctx context.Context, arg UpsertOrgFlagOverrideParams) error
+	UpsertUserFlagOverride(ctx context.Context, arg UpsertUserFlagOverrideParams) error
 }
 
 var _ Querier = (*Queries)(nil)

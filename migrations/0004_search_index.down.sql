@@ -1,0 +1,11 @@
+DROP TRIGGER IF EXISTS trg_comment_search_delete ON comments;
+DROP TRIGGER IF EXISTS trg_comment_search ON comments;
+DROP TRIGGER IF EXISTS trg_project_search_delete ON projects;
+DROP TRIGGER IF EXISTS trg_project_search ON projects;
+DROP TRIGGER IF EXISTS trg_task_search_delete ON tasks;
+DROP TRIGGER IF EXISTS trg_task_search ON tasks;
+DROP FUNCTION IF EXISTS reindex_comment();
+DROP FUNCTION IF EXISTS reindex_project();
+DROP FUNCTION IF EXISTS reindex_task();
+DROP FUNCTION IF EXISTS delete_search_index();
+DROP TABLE IF EXISTS search_index;

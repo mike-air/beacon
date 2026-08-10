@@ -30,6 +30,14 @@ type harness struct {
 
 func newHarness(t *testing.T) *harness {
 	t.Helper()
+	return newHarnessWith(t, nil)
+}
+
+// newHarnessWith builds the same harness but lets a test adjust the config
+// before the server is wired — used by the rate-limit test below, which needs
+// the production-shaped limits the other tests deliberately raise.
+func newHarnessWith(t *testing.T, tweak func(*config.Config)) *harness {
+	t.Helper()
 	pool := testsupport.NewTestPool(t)
 
 	cfg := &config.Config{
@@ -40,6 +48,25 @@ func newHarness(t *testing.T) *harness {
 		CORSOrigins:        []string{"http://localhost:3000"},
 		WorkerPollInterval: time.Second,
 		WorkerConcurrency:  1,
+
+		// Ch 19 — the rate limiter is real in this router, and the test suite
+		// looks exactly like abuse: dozens of signups and logins from one IP in
+		// under a second. Left at the production defaults (5/min, burst 10) the
+		// suite throttles itself and every later test fails with a 429 that has
+		// nothing to do with what it was checking.
+		//
+		// So the limits are raised here rather than switched off. Switching the
+		// middleware off would mean the e2e tests exercise a router that does
+		// not exist in production; raising the numbers keeps the same code path
+		// with a ceiling the tests do not hit. Ch19's own behaviour is proved
+		// separately, at the bottom of this file.
+		TenantRateLimitRPS:   10_000,
+		TenantRateLimitBurst: 10_000,
+		AuthRateLimitRPS:     10_000,
+		AuthRateLimitBurst:   10_000,
+	}
+	if tweak != nil {
+		tweak(cfg)
 	}
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
 
@@ -216,4 +243,156 @@ func TestE2ECrossTenantForbidden(t *testing.T) {
 	if !ok || errObj["code"] != "not_member" {
 		t.Errorf("403 envelope = %v, want code not_member", eb)
 	}
+}
+
+// Chapter 19 — the rate limiter, through the real router.
+//
+// The limits are set to production shape here (the other tests raise them; see
+// newHarness), so this exercises the same middleware the deployed service runs.
+func TestE2EAuthRateLimit(t *testing.T) {
+	h := newHarnessWith(t, func(cfg *config.Config) {
+		cfg.AuthRateLimitRPS = 5.0 / 60.0 // 5 per minute
+		cfg.AuthRateLimitBurst = 3        // small, so the test is fast
+	})
+
+	body := map[string]any{
+		"email":    "burst@example.com",
+		"name":     "Burst",
+		"password": "correct horse battery staple",
+	}
+
+	// The burst is spent first: three requests get through whatever they answer.
+	for i := 0; i < 3; i++ {
+		status, _ := h.do(http.MethodPost, "/v1/auth/signup", "", body)
+		if status == http.StatusTooManyRequests {
+			t.Fatalf("request %d was limited while the burst should still have room", i+1)
+		}
+	}
+
+	// The fourth finds an empty bucket.
+	status, resp := h.do(http.MethodPost, "/v1/auth/signup", "", body)
+	if status != http.StatusTooManyRequests {
+		t.Fatalf("status after the burst = %d, want 429 (body=%v)", status, resp)
+	}
+	errObj, ok := resp["error"].(map[string]any)
+	if !ok || errObj["code"] != "rate_limited" {
+		t.Errorf("429 envelope = %v, want code rate_limited", resp)
+	}
+}
+
+// Chapter 14 — idempotency, through the real router. The four cases the chapter
+// names, in order: new key, replay, changed body, and no key at all.
+func TestE2EIdempotency(t *testing.T) {
+	h := newHarness(t)
+
+	_, _ = h.do(http.MethodPost, "/v1/auth/signup", "", map[string]any{
+		"email":    "idem@example.com",
+		"name":     "Idem",
+		"password": "correct horse battery staple",
+	})
+	_, loginBody := h.do(http.MethodPost, "/v1/auth/login", "", map[string]any{
+		"email":    "idem@example.com",
+		"password": "correct horse battery staple",
+	})
+	token, _ := loginBody["token"].(string)
+	if token == "" {
+		t.Fatal("login returned no token")
+	}
+	_, orgBody := h.do(http.MethodPost, "/v1/orgs", token, map[string]any{"name": "Idem Org"})
+	orgID, _ := orgBody["id"].(string)
+
+	const key = "beacon-e2e-idempotency-key-01"
+	path := "/v1/orgs/" + orgID + "/projects"
+	create := map[string]any{"name": "Only Once"}
+
+	// 1. New key: the handler runs.
+	status, first := h.doWithHeaders(http.MethodPost, path, token, create,
+		map[string]string{"Idempotency-Key": key})
+	if status != http.StatusCreated {
+		t.Fatalf("first create = %d (body=%v)", status, first)
+	}
+
+	// 2. Same key, same body: the stored response comes back, byte for byte.
+	status, second := h.doWithHeaders(http.MethodPost, path, token, create,
+		map[string]string{"Idempotency-Key": key})
+	if status != http.StatusCreated {
+		t.Fatalf("replay = %d (body=%v)", status, second)
+	}
+	if first["id"] != second["id"] {
+		t.Errorf("replay returned a different project: %v vs %v", first["id"], second["id"])
+	}
+
+	// 3. Same key, different body: refused, because the key is a promise about
+	//    one specific request.
+	status, third := h.doWithHeaders(http.MethodPost, path, token,
+		map[string]any{"name": "Something Else"},
+		map[string]string{"Idempotency-Key": key})
+	if status != http.StatusUnprocessableEntity {
+		t.Fatalf("reused key with a different body = %d (body=%v)", status, third)
+	}
+
+	// 4. No key at all: the request runs normally, and the caller carries the
+	//    duplicate risk themselves.
+	status, _ = h.do(http.MethodPost, path, token, map[string]any{"name": "Unprotected"})
+	if status != http.StatusCreated {
+		t.Fatalf("create without a key = %d", status)
+	}
+	status, _ = h.do(http.MethodPost, path, token, map[string]any{"name": "Unprotected"})
+	if status != http.StatusCreated {
+		t.Fatalf("second create without a key = %d, want another 201", status)
+	}
+
+	// Exactly one "Only Once" project exists, which is the whole claim.
+	_, list := h.do(http.MethodGet, path, token, nil)
+	items, _ := list["items"].([]any)
+	count := 0
+	for _, it := range items {
+		if m, ok := it.(map[string]any); ok && m["name"] == "Only Once" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("found %d projects named \"Only Once\", want exactly 1", count)
+	}
+}
+
+// doWithHeaders is do() plus arbitrary request headers, for the idempotency and
+// caching tests.
+func (h *harness) doWithHeaders(method, path, token string, body any, headers map[string]string) (int, map[string]any) {
+	h.t.Helper()
+
+	var rdr io.Reader
+	if body != nil {
+		raw, err := json.Marshal(body)
+		if err != nil {
+			h.t.Fatalf("marshal body: %v", err)
+		}
+		rdr = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequestWithContext(context.Background(), method, h.server.URL+path, rdr)
+	if err != nil {
+		h.t.Fatalf("new request: %v", err)
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := h.server.Client().Do(req)
+	if err != nil {
+		h.t.Fatalf("%s %s: %v", method, path, err)
+	}
+	defer resp.Body.Close()
+
+	var decoded map[string]any
+	raw, _ := io.ReadAll(resp.Body)
+	if len(raw) > 0 {
+		_ = json.Unmarshal(raw, &decoded)
+	}
+	return resp.StatusCode, decoded
 }

@@ -26,6 +26,12 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
+
+	"beacon/internal/observability"
 )
 
 // Job kinds. Handlers are registered against these strings.
@@ -57,8 +63,8 @@ type Client struct {
 func NewClient(pool *pgxpool.Pool) *Client { return &Client{pool: pool} }
 
 const insertSQL = `
-	INSERT INTO jobs (kind, payload, max_attempts)
-	VALUES ($1, $2, $3)`
+	INSERT INTO jobs (kind, payload, max_attempts, trace_context)
+	VALUES ($1, $2, $3, $4)`
 
 const defaultMaxAttempts = 5
 
@@ -78,7 +84,20 @@ func enqueue(ctx context.Context, db dbExecer, kind string, payload any) error {
 	if err != nil {
 		return fmt.Errorf("jobs.Enqueue: marshal payload: %w", err)
 	}
-	if _, err := db.Exec(ctx, insertSQL, kind, raw, defaultMaxAttempts); err != nil {
+
+	// Ch 36 — carry the trace across the queue boundary. A context does not
+	// survive a database row, so the propagator writes the trace into a plain
+	// map of strings, the row stores it, and the worker reads it back. Without
+	// this the worker's work shows up as an unrelated orphan trace, and the
+	// question "why was this user's signup slow" stops at the enqueue.
+	carrier := propagation.MapCarrier{}
+	otel.GetTextMapPropagator().Inject(ctx, carrier)
+	traceCtx, err := json.Marshal(carrier)
+	if err != nil {
+		return fmt.Errorf("jobs.Enqueue: marshal trace context: %w", err)
+	}
+
+	if _, err := db.Exec(ctx, insertSQL, kind, raw, defaultMaxAttempts, traceCtx); err != nil {
 		return fmt.Errorf("jobs.Enqueue: %w", err)
 	}
 	return nil
@@ -170,7 +189,7 @@ func (w *Worker) claimAndRun(ctx context.Context, wg *sync.WaitGroup, sem chan s
 	defer tx.Rollback(ctx) //nolint:errcheck // no-op after commit
 
 	const claimSQL = `
-		SELECT id::text, kind, payload, attempts, max_attempts
+		SELECT id::text, kind, payload, attempts, max_attempts, trace_context
 		FROM jobs
 		WHERE status = 'pending' AND run_at <= now()
 		ORDER BY run_at ASC
@@ -182,8 +201,9 @@ func (w *Worker) claimAndRun(ctx context.Context, wg *sync.WaitGroup, sem chan s
 		payload     json.RawMessage
 		attempts    int
 		maxAttempts int
+		traceCtx    json.RawMessage
 	)
-	err = tx.QueryRow(ctx, claimSQL).Scan(&id, &kind, &payload, &attempts, &maxAttempts)
+	err = tx.QueryRow(ctx, claimSQL).Scan(&id, &kind, &payload, &attempts, &maxAttempts, &traceCtx)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}
@@ -202,14 +222,14 @@ func (w *Worker) claimAndRun(ctx context.Context, wg *sync.WaitGroup, sem chan s
 	go func() {
 		defer wg.Done()
 		defer func() { <-sem }()
-		w.execute(ctx, id, kind, payload, attempts, maxAttempts)
+		w.execute(ctx, id, kind, payload, attempts, maxAttempts, traceCtx)
 	}()
 	return true, nil
 }
 
 // execute runs the handler and records the outcome: success → done; failure with
 // retries left → pending with backoff; failure with none left → dead.
-func (w *Worker) execute(ctx context.Context, id, kind string, payload json.RawMessage, attempts, maxAttempts int) {
+func (w *Worker) execute(ctx context.Context, id, kind string, payload json.RawMessage, attempts, maxAttempts int, traceCtx json.RawMessage) {
 	handler, ok := w.handlers[kind]
 	if !ok {
 		w.fail(ctx, id, attempts, maxAttempts, fmt.Errorf("no handler registered for kind %q", kind))
@@ -220,7 +240,29 @@ func (w *Worker) execute(ctx context.Context, id, kind string, payload json.RawM
 	runCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
 
-	if err := handler(runCtx, payload); err != nil {
+	// Ch 36 — rejoin the trace the enqueuer was in, then open a consumer span
+	// under it. SpanKindConsumer is what tells a trace UI to draw the worker's
+	// work hanging off the request that caused it, across the gap in time.
+	runCtx = extractTraceContext(runCtx, traceCtx)
+	runCtx, span := otel.Tracer("beacon/jobs").Start(runCtx, "job "+kind,
+		trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(attribute.String("job.kind", kind)),
+	)
+	defer span.End()
+
+	err := handler(runCtx, payload)
+
+	// Ch 35 — one counter, two labels, both bounded sets. Job kinds are a fixed
+	// list and outcome is success/failure, so this is four series, not four
+	// million.
+	outcome := "success"
+	if err != nil {
+		outcome = "failure"
+	}
+	observability.JobsCompletedTotal.WithLabelValues(kind, outcome).Inc()
+
+	if err != nil {
+		span.RecordError(err)
 		w.logger.Warn("job failed", slog.String("id", id), slog.String("kind", kind), slog.Any("err", err))
 		w.fail(ctx, id, attempts, maxAttempts, err)
 		return
@@ -230,6 +272,21 @@ func (w *Worker) execute(ctx context.Context, id, kind string, payload json.RawM
 	); err != nil {
 		w.logger.Error("job mark-done failed", slog.String("id", id), slog.Any("err", err))
 	}
+}
+
+// extractTraceContext rebuilds the enqueuer's trace context from the stored
+// map. A missing or malformed value is not an error — the job simply starts its
+// own trace, which is what happened before Chapter 36 for every job in the
+// table.
+func extractTraceContext(ctx context.Context, raw json.RawMessage) context.Context {
+	if len(raw) == 0 {
+		return ctx
+	}
+	carrier := propagation.MapCarrier{}
+	if err := json.Unmarshal(raw, &carrier); err != nil {
+		return ctx
+	}
+	return otel.GetTextMapPropagator().Extract(ctx, carrier)
 }
 
 // fail records a failed attempt: reschedule with backoff if tries remain, else

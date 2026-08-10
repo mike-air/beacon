@@ -58,6 +58,66 @@ services:
       timeout: 3s
       retries: 5
 
+  # Redis — the cross-machine cache layer (Ch 28). Optional: leave REDIS_URL
+  # empty and the cache degrades to the in-process LRU only, which still works,
+  # just per-instance. `redis-cli monitor` here is the fastest way to watch a
+  # cache hit turn into no database query at all.
+  redis:
+    image: redis:7-alpine
+    container_name: beacon-redis
+    command: redis-server --save "" --appendonly no
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Meilisearch — the search engine Chapter 30 graduates to when Postgres FTS
+  # runs out (typo tolerance, per-document language, facets). Optional: leave
+  # MEILI_URL empty and search stays on the Chapter 29 Postgres path.
+  meilisearch:
+    image: getmeili/meilisearch:v1.16
+    container_name: beacon-meili
+    environment:
+      MEILI_MASTER_KEY: beacon-dev-master-key
+      MEILI_ENV: development
+    ports:
+      - "7700:7700"
+    volumes:
+      - beacon_meilidata:/meili_data
+
+  # OpenTelemetry Collector — where Beacon's spans go (Ch 36). The debug
+  # exporter prints each trace to the container log:
+  #   docker logs -f beacon-otel
+  # Optional: leave OTEL_EXPORTER_OTLP_ENDPOINT unset and tracing is off.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.115.1
+    container_name: beacon-otel
+    command: ["--config=/etc/otel/collector.yaml"]
+    volumes:
+      - ./otel/collector.yaml:/etc/otel/collector.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+
+  # Prometheus — scrapes the internal port (Ch 35) and is what the Chapter 47
+  # canary gate queries. UI at http://localhost:9091.
+  prometheus:
+    image: prom/prometheus:v3.0.1
+    container_name: beacon-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=6h
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9091:9090"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
   beacon_pgdata:
   beacon_miniodata:
+  beacon_meilidata:

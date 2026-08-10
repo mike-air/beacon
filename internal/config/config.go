@@ -51,6 +51,51 @@ type Config struct {
 	// jobs table for due work; WorkerConcurrency caps in-flight jobs.
 	WorkerPollInterval time.Duration
 	WorkerConcurrency  int
+
+	// Cache (Ch 28). RedisURL is the shared layer; leave it empty and the cache
+	// degrades to the in-process LRU only. CacheTTL bounds staleness at every
+	// layer — the chapter's rule is that no entry is ever written without one.
+	RedisURL string
+	CacheTTL time.Duration
+
+	// Search (Ch 29–30). Postgres FTS is always on. MeiliURL is what turns the
+	// Chapter 30 engine on; leave it empty and search stays on Postgres, which
+	// is a complete product, not a degraded one.
+	MeiliURL   string
+	MeiliKey   string
+	MeiliIndex string
+
+	// Observability (Ch 35, 36, 50). MetricsPort is the SEPARATE internal
+	// listener that carries /metrics and /debug/pprof — never the public port.
+	// AdminToken gates pprof for non-loopback callers. OtelEndpoint is the OTLP
+	// collector; empty turns tracing off entirely. TraceSampleRatio is head
+	// sampling — 0.1 keeps one trace in ten.
+	MetricsPort      string
+	AdminToken       string
+	OtelEndpoint     string
+	TraceSampleRatio float64
+	Version          string
+
+	// Backups (Ch 45). The bucket must be with a DIFFERENT provider from the
+	// database — a backup in the same account as the thing it protects covers
+	// exactly one failure mode and not the interesting one. Empty disables the
+	// backup job. BackupAgeRecipient is an age PUBLIC key; the private half
+	// never goes near the server.
+	BackupBucket       string
+	BackupRegion       string
+	BackupEndpoint     string
+	BackupAccessKey    string
+	BackupSecretKey    string
+	BackupAgeRecipient string
+	BackupSourceURL    string // defaults to DatabaseURL
+
+	// Rate limiting (Ch 19). Two buckets: authenticated traffic keyed by org,
+	// unauthenticated auth endpoints keyed by IP. RPS is the sustained refill
+	// rate; Burst is how big a one-time spike is allowed through.
+	TenantRateLimitRPS   float64
+	TenantRateLimitBurst int
+	AuthRateLimitRPS     float64 // default 5/min, expressed as 5.0/60.0
+	AuthRateLimitBurst   int
 }
 
 // devJWTSecret is the fallback signing secret used outside production so the
@@ -86,6 +131,32 @@ func Load() (*Config, error) {
 
 		WorkerPollInterval: getDuration("WORKER_POLL_INTERVAL", time.Second),
 		WorkerConcurrency:  getInt("WORKER_CONCURRENCY", 5),
+
+		MeiliURL:   os.Getenv("MEILI_URL"),
+		MeiliKey:   os.Getenv("MEILI_KEY"),
+		MeiliIndex: getEnv("MEILI_INDEX", "beacon"),
+
+		MetricsPort:      getEnv("METRICS_PORT", "9090"),
+		AdminToken:       os.Getenv("ADMIN_TOKEN"),
+		OtelEndpoint:     os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"),
+		TraceSampleRatio: getFloat("OTEL_TRACE_SAMPLE_RATIO", 0.1),
+		Version:          getEnv("BEACON_VERSION", "dev"),
+
+		BackupBucket:       os.Getenv("BACKUP_BUCKET"),
+		BackupRegion:       getEnv("BACKUP_REGION", "us-east-1"),
+		BackupEndpoint:     os.Getenv("BACKUP_ENDPOINT"),
+		BackupAccessKey:    os.Getenv("BACKUP_ACCESS_KEY"),
+		BackupSecretKey:    os.Getenv("BACKUP_SECRET_KEY"),
+		BackupAgeRecipient: os.Getenv("BACKUP_AGE_RECIPIENT"),
+		BackupSourceURL:    os.Getenv("BACKUP_SOURCE_URL"),
+
+		RedisURL: os.Getenv("REDIS_URL"),
+		CacheTTL: getDuration("CACHE_TTL", 60*time.Second),
+
+		TenantRateLimitRPS:   getFloat("TENANT_RATE_LIMIT_RPS", 10),
+		TenantRateLimitBurst: getInt("TENANT_RATE_LIMIT_BURST", 60),
+		AuthRateLimitRPS:     getFloat("AUTH_RATE_LIMIT_RPS", 5.0/60.0), // 5 per minute
+		AuthRateLimitBurst:   getInt("AUTH_RATE_LIMIT_BURST", 10),
 	}
 
 	var missing []string
@@ -100,6 +171,9 @@ func Load() (*Config, error) {
 		} else {
 			cfg.JWTSecret = devJWTSecret
 		}
+	}
+	if cfg.BackupSourceURL == "" {
+		cfg.BackupSourceURL = cfg.DatabaseURL
 	}
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("missing required environment variables: %v", missing)
@@ -117,10 +191,34 @@ func (c *Config) StorageEnabled() bool { return c.S3Bucket != "" }
 // email sender logs instead of dialing out.
 func (c *Config) SMTPEnabled() bool { return c.SMTPHost != "" }
 
+// CacheEnabled reports whether the shared Redis layer is configured. When false
+// the read-through cache still works, just per-instance (Ch 28).
+func (c *Config) CacheEnabled() bool { return c.RedisURL != "" }
+
+// MeiliEnabled reports whether the Chapter 30 search engine is configured. When
+// false, search runs entirely on the Chapter 29 Postgres path.
+func (c *Config) MeiliEnabled() bool { return c.MeiliURL != "" }
+
+// BackupsEnabled reports whether the Chapter 45 off-provider dump is
+// configured. When false the job is not registered and the nightly cron entry
+// does not fire.
+func (c *Config) BackupsEnabled() bool {
+	return c.BackupBucket != "" && c.BackupAgeRecipient != ""
+}
+
 func getInt(key string, fallback int) int {
 	if v := os.Getenv(key); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			return n
+		}
+	}
+	return fallback
+}
+
+func getFloat(key string, fallback float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
 		}
 	}
 	return fallback

@@ -1,0 +1,2 @@
+ALTER TABLE organizations DROP COLUMN IF EXISTS default_locale;
+ALTER TABLE users DROP COLUMN IF EXISTS timezone, DROP COLUMN IF EXISTS locale;

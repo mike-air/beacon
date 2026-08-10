@@ -1,0 +1,11 @@
+-- Chapter 36 — carrying a trace across the queue boundary.
+--
+-- A context.Context cannot survive a database row, so the W3C trace context is
+-- serialised into a small map of strings ({"traceparent": "00-..."}) and stored
+-- alongside the payload. The worker extracts it and its span becomes a child of
+-- the request that enqueued the job — which is the difference between "signup
+-- was slow" and "signup was slow because the welcome email took four seconds".
+--
+-- Nullable with a default, so every job already in the table keeps working and
+-- simply starts its own trace.
+ALTER TABLE jobs ADD COLUMN trace_context jsonb NOT NULL DEFAULT '{}'::jsonb;

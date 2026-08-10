@@ -1,6 +1,7 @@
 # Beacon — Product Requirements Document
 
-**Status:** Foundations built and running. Core loop works end to end.
+**Status:** Foundations, scale features, and the operational story are built and
+running. Core loop works end to end.
 **Audience:** Anyone deciding what Beacon should do next — not a code
 walkthrough. For "where is the code," see [READING.md](READING.md).
 
@@ -113,6 +114,55 @@ storage (MinIO), and a real mail catcher (Mailpit) as of this document.
   a machine-readable code plus a human message — rather than fifty
   handlers each inventing their own error format.
 
+### Scale and safety
+
+- **Safe retries.** A client can attach an idempotency key to any request that
+  changes something. Retry it after a dropped connection and the second attempt
+  returns the first one's answer rather than doing the work twice — the
+  difference between "the train went into a tunnel" and "the customer was
+  charged twice".
+- **Fairness limits.** Each customer gets their own request budget, and the
+  login endpoints get a much tighter one per network address. One customer's
+  runaway script can no longer slow the service down for everybody else.
+- **Caching.** Frequent reads are answered from memory or a shared cache before
+  they reach the database, and a change to the underlying record clears the copy
+  immediately rather than waiting for it to expire.
+- **Search.** People can search their organisation's tasks, projects and
+  comments by words rather than by scrolling. It understands that "authenticating"
+  and "authentication" are the same word, and word order does not matter. With
+  the optional search engine switched on it also tolerates typos; with it
+  switched off, or broken, search keeps working with slightly different ranking
+  rather than returning nothing.
+- **Gradual rollout.** New features can be switched on for one customer, or one
+  person, without a deploy, and switched off just as fast — and a feature can be
+  split so half the eligible people see the new version, for measuring whether
+  it is actually better.
+- **Local formats.** Dates, times and currency render in the reader's language
+  and time zone. Money is never stored as a decimal fraction, which is the usual
+  way rounding errors get into a ledger.
+
+### Operations
+
+- **Watching it live.** The system publishes its own numbers — request rates,
+  latencies, error rates, queue depth — and every request can be followed as a
+  single connected trace from the browser call through the database and on into
+  the background job it triggered, minutes later.
+- **Backups that have been restored.** A nightly encrypted copy goes to storage
+  with a different provider from the database, and a drill script restores it
+  into a scratch database and checks the data actually came back. A backup
+  nobody has restored is a hope, not a backup.
+- **Deploys with an undo.** Two identical copies of the service exist; one is
+  live, one is dark. New code goes to the dark one and is tested with no users
+  on it, then traffic is switched in one step. Undoing that switch takes seconds
+  and needs no rebuild.
+- **Deploys that watch themselves.** A new version can be given 1% of traffic,
+  then 10%, then 50%, with automatic checks on error rate, latency, error budget
+  and any error signature nobody has seen before. Any check failing puts traffic
+  back to zero without a human.
+- **Written-down responses.** Three incident runbooks (database slow, work queue
+  backing up, an outside service throttling us) and a postmortem process, so
+  the same problem is not solved from scratch at 3am twice.
+
 ## 5. What's explicitly not built yet
 
 Real gaps, not oversights, and not hidden. Ranked roughly by how soon a
@@ -120,16 +170,22 @@ real product would need them:
 
 | Missing | Why it eventually matters | Effort |
 |---|---|---|
-| **Idempotency keys** | Right now, retrying a failed "create task" request after a network blip can create it twice. | Small |
-| **Rate limiting** | One customer (or one bug in their integration) can currently hammer the API with no limit. | Small |
-| **Caching** | Every read hits Postgres directly. Fine at this scale, not at 10x. | Medium |
-| **Full-text search** | Finding a task means listing and scanning; there's no "search for the word X". | Medium |
-| **Feature flags** | Every feature is live for every customer the moment it ships — no gradual rollout. | Small |
-| **Metrics, tracing, health dashboards** | We can read logs after something breaks; we can't watch the system in real time. | Medium |
-| **Deployment pipeline** | This runs on a laptop against Docker. There is no story yet for a real server, CI gating, or backups. | Large |
+| **Undo for deletions** | Deleting a project removes it permanently. Customers delete things by mistake constantly, and "we cannot get it back" is an expensive sentence. | Medium |
+| **An audit trail** | There is no record of who changed what. The first enterprise customer will ask for one, usually during a security review. | Medium |
+| **API keys** | Integrations have to log in as a person. A machine credential that can be revoked on its own is the normal answer. | Small |
+| **Actually running on a server** | This runs on a laptop against Docker. The deploy machinery is written and the checks are tested, but nothing has been deployed. | Medium |
+| **Cursor pagination** | Paging by offset gets slow on large lists and can skip or repeat rows while data is being written. | Medium |
+| **Refresh tokens** | The access token lasts an hour and then the person logs in again. Standard practice is a short token plus a refresh flow. | Medium |
 
 None of these are architecturally blocked — the system was built with
 room for all of them. They're sequenced work, not redesign work.
+
+**One honest caveat about the deploy story.** The blue-green and canary
+machinery is written, and the controller that drives it has been run against a
+real metrics system and made to both approve and reject a rollout. But the
+traffic routers themselves need a hosting account nobody has set up, so no
+actual cutover has been performed. Everything else described in this document
+has been run and watched working.
 
 ## 6. Key product decisions, and the trade-off behind each
 
@@ -142,11 +198,24 @@ rule on every query. The column approach is boring, and boring was the
 right call for the first version. It can be hardened later without a
 rewrite if a customer's contract ever requires it.
 
-**Deletions are soft, not hard.** A customer who deletes something by
-mistake — which happens constantly — can be recovered. The cost is a
-small amount of extra housekeeping in every query. Worth it; "we
-permanently deleted your data by accident" is not a sentence a product
-recovers from.
+**Deletions are soft, not hard — as a decision, not yet as code.** The intent is
+that a customer who deletes something by mistake can get it back, at the cost of
+extra housekeeping in every query. Worth it: "we permanently deleted your data
+by accident" is not a sentence a product recovers from. This is listed in §5
+because the decision is made and the implementation is not.
+
+**Search is answered by the database until it can't be.** Postgres has a
+capable search engine built in, and using it means no second system to run,
+keep in sync, or be woken up by. A dedicated search engine was added on top only
+for what the database genuinely cannot do — typo tolerance — and the database
+remains the source of truth, so the search engine failing degrades results
+rather than removing them.
+
+**The system limits its own customers.** Rate limiting is usually described as
+protection against attackers. Here it is mostly about fairness: one customer's
+runaway integration should not be able to make the product slow for everybody
+else, and the limit is set per organisation because that is the unit customers
+pay for.
 
 **File uploads bypass the API server.** The server hands out a temporary
 signed link and the browser uploads straight to storage. This means the
@@ -171,8 +240,15 @@ anything handling real accounts.
   record changed since you last read it, to prevent one person's edit
   silently overwriting another's.
 - **Idempotency key** — a value a client sends so that retrying the same
-  request twice has the same effect as sending it once. Not yet built
-  (see §5).
+  request twice has the same effect as sending it once.
+- **Feature flag** — a switch that turns a feature on for some customers
+  without shipping new code.
+- **Canary** — giving a new version a small slice of real traffic and watching
+  it, before everybody gets it.
+- **Trace** — the record of one request's whole journey through the system,
+  including the background work it caused afterwards.
+- **RPO / RTO** — how much data you would lose, and how long you would be down,
+  in a disaster. Beacon targets five minutes and one hour.
 - **Webhook** — an outbound HTTP call Beacon makes to a URL a customer
   registers, notifying them that something happened in their account.
 

@@ -1,0 +1,32 @@
+# A minimal OpenTelemetry Collector for local work (Chapter 36).
+#
+# Beacon exports OTLP over gRPC on :4317. The debug exporter prints whole traces
+# to the container log, which is all you need to answer the only question that
+# matters while you are learning: did the span tree come out the shape I think
+# it did?
+#
+# In production this same collector is where TAIL-based sampling goes: keep 10%
+# of ordinary traces (Beacon's head sampler already does that), but keep 100% of
+# anything containing a 5xx or a slow span. Head sampling has to decide before
+# it knows whether the request went wrong; the collector decides after.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+
+exporters:
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

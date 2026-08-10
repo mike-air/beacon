@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/exaring/otelpgx"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -22,6 +23,11 @@ func Connect(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	if err != nil {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
+
+	// Ch 36 — one line, and every query in the app becomes a child span with
+	// its SQL attached. This is where "the endpoint is slow" turns into "the
+	// endpoint runs the same query eleven times" without anyone guessing.
+	cfg.ConnConfig.Tracer = otelpgx.NewTracer()
 
 	// Sensible pool defaults. Tune per-deployment later (Chapter 5 / 50).
 	cfg.MaxConns = 10

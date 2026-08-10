@@ -21,6 +21,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"beacon/internal/db"
 )
 
@@ -262,11 +266,28 @@ func NewService(repo *Repo) *Service { return &Service{repo: repo} }
 
 // Create makes a new task. Status defaults to "todo"; a supplied status must
 // be valid.
+// Create validates and inserts a task.
+//
+// Ch 36 — the service-layer span. Two details matter and both are easy to get
+// wrong. First, USE the ctx that Start returns: pass the original one
+// downstream and the child spans become orphans and the tree is a lie. Second,
+// the attributes are log-grade — org and project ids, never a title, an email
+// or anything else a person wrote. Spans go to a third-party backend and get
+// read by anyone with a login.
 func (s *Service) Create(ctx context.Context, orgID, projectID, title, status string, position float64) (Task, error) {
+	ctx, span := otel.Tracer("beacon/tasks").Start(ctx, "tasks.Create",
+		trace.WithAttributes(
+			attribute.String("org_id", orgID),
+			attribute.String("project_id", projectID),
+		),
+	)
+	defer span.End()
+
 	if status == "" {
 		status = StatusTodo
 	}
 	if !ValidStatus(status) {
+		span.RecordError(ErrInvalidStatus)
 		return Task{}, ErrInvalidStatus
 	}
 	return s.repo.Create(ctx, orgID, projectID, title, status, position)

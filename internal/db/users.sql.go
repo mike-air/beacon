@@ -100,3 +100,46 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 	)
 	return i, err
 }
+
+const getUserPreferences = `-- name: GetUserPreferences :one
+
+SELECT u.locale, u.timezone, COALESCE(o.default_locale, '') AS org_default_locale
+FROM users u
+LEFT JOIN organizations o ON o.id = $2
+WHERE u.id = $1
+`
+
+type GetUserPreferencesParams struct {
+	ID   uuid.UUID `json:"id"`
+	ID_2 uuid.UUID `json:"id_2"`
+}
+
+type GetUserPreferencesRow struct {
+	Locale           string `json:"locale"`
+	Timezone         string `json:"timezone"`
+	OrgDefaultLocale string `json:"org_default_locale"`
+}
+
+// Chapter 33 — the locale cascade's first two steps live in one row each.
+// One query, because resolving a locale on every request must not be two.
+func (q *Queries) GetUserPreferences(ctx context.Context, arg GetUserPreferencesParams) (GetUserPreferencesRow, error) {
+	row := q.db.QueryRow(ctx, getUserPreferences, arg.ID, arg.ID_2)
+	var i GetUserPreferencesRow
+	err := row.Scan(&i.Locale, &i.Timezone, &i.OrgDefaultLocale)
+	return i, err
+}
+
+const setUserPreferences = `-- name: SetUserPreferences :exec
+UPDATE users SET locale = $2, timezone = $3 WHERE id = $1
+`
+
+type SetUserPreferencesParams struct {
+	ID       uuid.UUID `json:"id"`
+	Locale   string    `json:"locale"`
+	Timezone string    `json:"timezone"`
+}
+
+func (q *Queries) SetUserPreferences(ctx context.Context, arg SetUserPreferencesParams) error {
+	_, err := q.db.Exec(ctx, setUserPreferences, arg.ID, arg.Locale, arg.Timezone)
+	return err
+}

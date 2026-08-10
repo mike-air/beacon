@@ -24,10 +24,19 @@ internal/
   email/                 ← Sender: SMTP (go-mail) or LogSender  (Ch 23)
   webhooks/              ← outgoing webhooks + HMAC signing     (Ch 24)
   realtime/              ← in-memory per-org SSE fan-out hub     (Ch 25)
-  jobs/                  ← Postgres-backed job queue + worker   (Ch 26)
+  jobs/                  ← Postgres-backed job queue + worker   (Ch 26, 45)
   cron/                  ← in-process scheduler (robfig/cron)   (Ch 27)
-migrations/              ← SQL schema, embedded into the binary (Ch 5–10, 24, 26)
-deploy/                  ← docker-compose (Postgres + Mailpit + MinIO)
+  cache/                 ← in-process LRU + Redis + singleflight (Ch 28)
+  search/                ← Postgres FTS, then Meilisearch        (Ch 29–30)
+  flags/                 ← feature flags with a 30s TTL cache    (Ch 31)
+  experiments/           ← stable hash-based A/B assignment      (Ch 32)
+  i18n/                  ← locale cascade, money, time zones     (Ch 33)
+cmd/canary-controller/   ← the progressive-rollout gate          (Ch 47)
+migrations/              ← SQL schema, embedded into the binary (Ch 5–10, 14, 24, 26, 29–33, 36)
+deploy/                  ← docker-compose + blue-green, canary, prometheus, otel configs
+docs/runbooks/           ← incident runbooks                     (Ch 48)
+docs/postmortems/        ← the postmortem template + how to run one (Ch 49)
+scripts/                 ← restore drill, smoke test, k6 load test (Ch 45, 46, 50)
 ```
 
 The one import rule: `cmd/` may import `internal/`; nothing in `internal/` imports `cmd/`. Domain packages never import `internal/http`.
@@ -40,12 +49,25 @@ make db-up          # start Postgres in Docker
 make run            # migrates on boot, then serves on :8080
 ```
 
+Postgres is the only hard requirement. Everything else degrades cleanly when it
+is not configured — no Redis means the cache is per-process, no `MEILI_URL`
+means search runs on Postgres, no OTLP endpoint means tracing is off. To get the
+whole stack:
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+That adds Redis (Ch 28), Meilisearch (Ch 30), Prometheus at :9091 (Ch 35, 47),
+an OpenTelemetry collector (Ch 36), Mailpit and MinIO.
+
 Then:
 
 ```bash
 curl localhost:8080/healthz   # {"status":"ok"}
 curl localhost:8080/readyz    # {"status":"ready"}  (pings the DB)
 curl localhost:8080/v1/       # {"service":"beacon-api","status":"ok"}
+curl localhost:9090/metrics   # Prometheus metrics — the INTERNAL port (Ch 35)
 ```
 
 First run, `make tidy` once to download dependencies and write `go.sum`.
@@ -91,13 +113,29 @@ This repo is built in verified passes. Phase 1 is the bootable core; the rest la
 - [x] Ch 41 — `Dockerfile` (multi-stage, static CGO-free binary, distroless non-root final stage) + `.dockerignore`
 - [x] Ch 43 — CI (`.github/workflows/ci.yml`: lint/build/unit, integration on a postgres:16 service container, docker build)
 
+**Done — Phase 5 (scale, switches, and operations):**
+- [x] Ch 14 — idempotency keys (`internal/http/idempotency.go`; `Idempotency-Key` on mutating routes, four cases, atomic claim-or-find via `ON CONFLICT ... RETURNING (xmax = 0)`, daily cron sweep)
+- [x] Ch 19 — rate limiting (`internal/http/middleware_ratelimit.go`; token bucket per org for authenticated traffic, per IP for `/auth/*`, `Retry-After` on 429, GC loop so the IP map can't leak)
+- [x] Ch 28 — caching (`internal/cache`; in-process TTL-LRU → Redis → Postgres with `singleflight`, `Cache-Control`/`ETag`/`Vary` + 304 on `GET` one project, invalidate-after-commit)
+- [x] Ch 29 — Postgres full-text search (`search_index` + GIN, weighted `tsvector` maintained by triggers, `plainto_tsquery`, `ts_rank`, `ts_headline`)
+- [x] Ch 30 — Meilisearch in front of it (`internal/search/meili`; typo tolerance, tenant filter, reindex jobs enqueued in the writer's transaction, **falls back to Postgres** when Meili is down)
+- [x] Ch 31 — feature flags (`internal/flags`; user → org → default cascade, 30s TTL cache, fails closed)
+- [x] Ch 32 — A/B testing (`internal/experiments`; FNV-64 stable assignment, async audit row, flag gates then experiment splits)
+- [x] Ch 33 — i18n (`internal/i18n`; four-source locale cascade, message catalog with English as key and fallback, `go-money`, IANA zones)
+- [x] Ch 35 — Prometheus metrics (`internal/observability/metrics.go` + middleware; route PATTERN labels, on a separate internal port)
+- [x] Ch 36 — OpenTelemetry (`internal/observability/trace.go`; HTTP → service → pgx spans, `trace_id` on every log line, trace context carried across the job queue)
+- [x] Ch 45 — backups & DR (`internal/jobs/backup.go` pipes `pg_dump | gzip | age` straight to off-provider storage; `scripts/restore_drill.sh` + `scripts/restore_smoke.sql`)
+- [x] Ch 46 — blue-green (`deploy/bluegreen/`; Cloudflare Worker reading `live_color`, deploy + rollback scripts, `scripts/smoke.sh`)
+- [x] Ch 47 — canary (`deploy/canary/worker.js` + `cmd/canary-controller`; 1→10→50→100 ladder, four gate signals, back to 0% and exit non-zero on failure)
+- [x] Ch 48 — runbooks (`docs/runbooks/`; database slow, queue backlog, upstream 429s — Symptom / Diagnostic / Mitigation / Escalation)
+- [x] Ch 49 — postmortems (`docs/postmortems/`; the template and how to run the meeting)
+- [x] Ch 50 — profiling & load (`/debug/pprof` behind the internal port + a token, `scripts/load/list_tasks.js` for k6)
+
 **Next passes (not yet built):**
 - [ ] Ch 9–10 — transactions, soft deletes & audit
-- [ ] Ch 14 — idempotency keys
-- [ ] Ch 18–20 — API keys, rate limiting, CORS/CSRF hardening
-- [ ] Ch 28–33 — caching, full-text + external search (Meili), feature flags, A/B, i18n
-- [ ] Ch 35–36 — Prometheus metrics, OpenTelemetry tracing
-- [ ] Ch 42, 44–50 — deploy, backups/DR, blue-green, canary, runbook, postmortem, profiling
+- [ ] Ch 18 — API keys
+- [ ] Ch 20 — CORS/CSRF hardening beyond the current CORS middleware
+- [ ] Ch 42, 44 — docker-compose for production, deploying
 
 > A note on fidelity: each pass makes independent calls where a later chapter formalizes things. The CRUD repositories are now **sqlc-generated** (Ch 8): the queries live in `internal/db/queries/*.sql` and sqlc emits the row structs and query functions into a **single `internal/db` package** (`package db`) rather than one generated package per domain. That single-package layout is a layout choice — still plain sqlc-generated code; it just keeps one importable `Queries` type. Each domain repo (`users`, `orgs`, `projects`, `tasks`, `attachments`, `webhooks`) calls those generated functions and maps the rows into its existing domain struct, so the service APIs, handlers, and tests are unchanged. Other deviations remain: a single JWT access token instead of the course's refresh-token rotation, and offset pagination instead of cursors.
 >
@@ -135,3 +173,62 @@ GET    /v1/orgs/{orgID}/projects/{p}/tasks/{t}/attachments/{id}  # → presigned
 ```
 
 The attachment endpoints return `501 storage_disabled` until `S3_BUCKET` is set. Email is logged (not sent) until `SMTP_HOST` is set. Both let `make run` boot with only Postgres.
+
+## Phase-5 endpoints
+
+```
+GET    /v1/me/preferences                        # locale + timezone, and what they render (Ch 33)
+PATCH  /v1/me/preferences                        # store an IANA zone and a BCP-47 tag
+GET    /v1/orgs/{orgID}/search?q=                # tasks, projects and comments (Ch 29–30)
+```
+
+On the **internal** port (`:9090` by default — never point a load balancer at it):
+
+```
+GET /metrics                                     # Prometheus (Ch 35)
+GET /debug/pprof/*                               # loopback or X-Admin-Token (Ch 50)
+GET /healthz
+```
+
+Any mutating request may carry an `Idempotency-Key` header (Ch 14):
+
+```bash
+curl -X POST localhost:8080/v1/orgs/$ORG/projects \
+  -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: whatever-you-like-16-chars-min' \
+  -d '{"name":"Only Once"}'
+```
+
+Send it twice and the second response is the first one replayed, with
+`Idempotent-Replayed: true` and exactly one row in the database.
+
+## Operating it
+
+| Task | Command |
+|---|---|
+| Prove the backups restore | `RESTORE_TARGET_URL=... ./scripts/restore_drill.sh` |
+| Smoke-test a stack from outside | `./scripts/smoke.sh https://beacon-api-green.fly.dev` |
+| Deploy blue-green | `./deploy/bluegreen/deploy_bluegreen.sh <image-sha>` |
+| Roll back (seconds, no build) | `./deploy/bluegreen/rollback.sh` |
+| Run a canary | `go run ./cmd/canary-controller --color green` |
+| Check the canary gate without changing anything | `go run ./cmd/canary-controller --color green --dry-run` |
+| Load test | `k6 run scripts/load/list_tasks.js` (see `scripts/load/README.md`) |
+| Profile under load | `go tool pprof http://localhost:9090/debug/pprof/profile?seconds=30` |
+
+When something is on fire, start at [`docs/runbooks/`](docs/runbooks/). When it
+is out, start at [`docs/postmortems/`](docs/postmortems/).
+
+> **What is and is not proven here.** Everything in Phases 1–5 that can run
+> locally has been run: the idempotency race against real concurrent requests,
+> the cache across a process restart, both search engines and the fallback
+> between them, the flag cascade and the experiment split, the locale cascade,
+> a real trace crossing the job queue, a real `/metrics` scrape, a real
+> `pg_dump` restored into a throwaway database with the smoke queries passing —
+> and failing, when pointed at an empty one. The canary gate was run against a
+> real Prometheus and made to both pass and fail.
+>
+> The blue-green and canary **routers** (`deploy/bluegreen/worker.js`,
+> `deploy/canary/worker.js`) and the deploy scripts have not been run: they need
+> a Fly.io account and a Cloudflare Worker with a KV namespace. They are written
+> and wired, and the controller that drives them is tested — but nobody has
+> watched a real cutover here, and this README will not pretend otherwise.

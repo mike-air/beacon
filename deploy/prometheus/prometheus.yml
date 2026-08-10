@@ -1,0 +1,25 @@
+# Prometheus for local work (Chapters 35 and 47).
+#
+# It scrapes Beacon's INTERNAL port, never the public one — /metrics lives on
+# :9090 with pprof, behind the same "not on the internet" boundary.
+#
+# The `color` label is what the Chapter 47 canary gate compares on. In a real
+# deploy the two jobs below are two different stacks. Locally there is one
+# process, scraped twice under two labels, so the gate's queries have both sides
+# to compare and can be run for real. That is a RIG, not a canary: it proves the
+# queries and the controller work, not that a canary caught anything.
+global:
+  scrape_interval: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: beacon-blue
+    static_configs:
+      - targets: ["host.docker.internal:9090"]
+        labels:
+          color: blue
+  - job_name: beacon-green
+    static_configs:
+      - targets: ["host.docker.internal:9090"]
+        labels:
+          color: green

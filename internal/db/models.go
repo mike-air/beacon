@@ -28,6 +28,51 @@ type Comment struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type Experiment struct {
+	Key         string     `json:"key"`
+	Description string     `json:"description"`
+	Status      string     `json:"status"`
+	Variants    []byte     `json:"variants"`
+	StartedAt   *time.Time `json:"started_at"`
+	StoppedAt   *time.Time `json:"stopped_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type ExperimentAssignment struct {
+	ExperimentKey string    `json:"experiment_key"`
+	UserID        uuid.UUID `json:"user_id"`
+	Variant       string    `json:"variant"`
+	AssignedAt    time.Time `json:"assigned_at"`
+}
+
+type FeatureFlag struct {
+	Name         string    `json:"name"`
+	Description  string    `json:"description"`
+	DefaultValue bool      `json:"default_value"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+type FeatureFlagOverride struct {
+	FlagName  string     `json:"flag_name"`
+	OrgID     *uuid.UUID `json:"org_id"`
+	UserID    *uuid.UUID `json:"user_id"`
+	Value     bool       `json:"value"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+type IdempotencyKey struct {
+	Key            string     `json:"key"`
+	UserID         uuid.UUID  `json:"user_id"`
+	RequestHash    []byte     `json:"request_hash"`
+	Method         string     `json:"method"`
+	Path           string     `json:"path"`
+	ResponseStatus *int32     `json:"response_status"`
+	ResponseBody   []byte     `json:"response_body"`
+	CreatedAt      time.Time  `json:"created_at"`
+	CompletedAt    *time.Time `json:"completed_at"`
+}
+
 type Job struct {
 	ID          uuid.UUID `json:"id"`
 	Kind        string    `json:"kind"`
@@ -49,11 +94,12 @@ type Membership struct {
 }
 
 type Organization struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID            uuid.UUID `json:"id"`
+	Name          string    `json:"name"`
+	Slug          string    `json:"slug"`
+	CreatedAt     time.Time `json:"created_at"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	DefaultLocale string    `json:"default_locale"`
 }
 
 type Project struct {
@@ -62,6 +108,17 @@ type Project struct {
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type SearchIndex struct {
+	ID             uuid.UUID   `json:"id"`
+	OrganizationID uuid.UUID   `json:"organization_id"`
+	EntityKind     string      `json:"entity_kind"`
+	EntityID       uuid.UUID   `json:"entity_id"`
+	Title          string      `json:"title"`
+	Body           string      `json:"body"`
+	SearchVector   interface{} `json:"search_vector"`
+	UpdatedAt      time.Time   `json:"updated_at"`
 }
 
 type Task struct {
@@ -82,6 +139,8 @@ type User struct {
 	Name         string    `json:"name"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	Locale       string    `json:"locale"`
+	Timezone     string    `json:"timezone"`
 }
 
 type Webhook struct {

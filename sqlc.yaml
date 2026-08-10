@@ -24,6 +24,10 @@ sql:
       - internal/db/queries/tasks.sql
       - internal/db/queries/attachments.sql
       - internal/db/queries/webhooks.sql
+      - internal/db/queries/idempotency.sql # Ch 14
+      - internal/db/queries/search.sql      # Ch 29–30
+      - internal/db/queries/flags.sql       # Ch 31
+      - internal/db/queries/experiments.sql # Ch 32
       # NOTE: the jobs queue stays hand-written pgx — its worker claims rows with
       # FOR UPDATE SKIP LOCKED inside a transaction (the Chapter 26 mechanism),
       # which is awkward to express through sqlc. sqlc covers the CRUD repos.

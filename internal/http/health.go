@@ -26,5 +26,11 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "not_ready", "database unreachable")
 		return
 	}
+	// Ch 28 — a dead shared cache should show up here as "not ready", not as
+	// mysterious latency on every request that misses.
+	if err := s.redis.Ping(ctx); err != nil {
+		writeError(w, http.StatusServiceUnavailable, "not_ready", "cache unreachable")
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }

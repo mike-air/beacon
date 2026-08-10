@@ -24,6 +24,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"beacon/internal/cache"
 	"beacon/internal/db"
 	"beacon/internal/pgerr"
 )
@@ -239,10 +240,30 @@ func (r *Repo) findUserIDByEmail(ctx context.Context, q *db.Queries, email strin
 type Service struct {
 	repo *Repo
 	pool *pgxpool.Pool
+
+	// Ch 28 — the membership cache. This is the hottest read in the whole API:
+	// requireOrg looks a membership up on every single org-scoped request, and
+	// the answer is a tiny row that changes about as often as someone joins a
+	// team. Exactly the shape the chapter says to cache. Nil = uncached.
+	memberships *cache.CachedReader[Membership]
 }
 
 func NewService(repo *Repo, pool *pgxpool.Pool) *Service {
 	return &Service{repo: repo, pool: pool}
+}
+
+// WithCache attaches the Chapter 28 read-through cache. Called from the wiring
+// step in NewServer; without it the service just reads Postgres every time.
+func (s *Service) WithCache(c *cache.CachedReader[Membership]) *Service {
+	s.memberships = c
+	return s
+}
+
+// membershipKey scopes every cache entry by org AND user. The chapter's rule:
+// put the tenant in the key, so the worst bug a typo can cause is a miss rather
+// than one customer reading another customer's data.
+func membershipKey(userID, orgID string) string {
+	return "membership:" + orgID + ":" + userID
 }
 
 // CreateOrg creates an organization and the owner's membership in a single
@@ -293,7 +314,21 @@ func (s *Service) AddMember(ctx context.Context, orgID, actorRole, email, role s
 	if err != nil {
 		return Membership{}, err
 	}
-	return s.repo.AddMembership(ctx, userID, orgID, role)
+	m, err := s.repo.AddMembership(ctx, userID, orgID, role)
+	if err != nil {
+		return Membership{}, err
+	}
+
+	// Ch 28 — invalidate AFTER the write commits, never before. Best effort: a
+	// failed delete means one stale read for at most the TTL, which is a much
+	// smaller problem than a failed request.
+	if s.memberships != nil {
+		if err := s.memberships.Del(ctx, membershipKey(userID, orgID)); err != nil {
+			// Nothing to do about it here; the TTL is the backstop.
+			_ = err
+		}
+	}
+	return m, nil
 }
 
 // Members lists an org's members.
@@ -302,8 +337,22 @@ func (s *Service) Members(ctx context.Context, orgID string) ([]Member, error) {
 }
 
 // GetMembership returns the caller's membership (used by middleware).
+//
+// Ch 28: a read-through cache sits in front of it. Miss walks in-process LRU →
+// Redis → Postgres, and singleflight means a hot key expiring under load runs
+// the query once, not once per waiting request.
+//
+// Note what is NOT cached: ErrNotMember. Caching a negative here would mean a
+// user added to an org keeps getting 403 for the whole TTL, and "I was invited
+// and it still says no" is a much worse bug than one extra query.
 func (s *Service) GetMembership(ctx context.Context, userID, orgID string) (Membership, error) {
-	return s.repo.GetMembership(ctx, userID, orgID)
+	if s.memberships == nil {
+		return s.repo.GetMembership(ctx, userID, orgID)
+	}
+	return s.memberships.Get(ctx, membershipKey(userID, orgID),
+		func(ctx context.Context) (Membership, error) {
+			return s.repo.GetMembership(ctx, userID, orgID)
+		})
 }
 
 // slugify turns a name into a URL-safe, unique-ish slug. We append a short
