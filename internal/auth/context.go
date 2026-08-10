@@ -1,0 +1,34 @@
+// Typed context keys that carry the authenticated user ID and their per-org
+// role through a request. The keys are private zero-size types nothing outside
+// this package can construct — no string collisions, no accidental overwrites.
+//
+// Course mapping: Chapter 16 — user context; Chapter 17 — the per-membership
+// role that RBAC checks against.
+package auth
+
+import "context"
+
+type userIDKey struct{}
+type roleKey struct{}
+
+// WithUserID returns a copy of ctx carrying the authenticated user ID.
+func WithUserID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, userIDKey{}, id)
+}
+
+// UserIDFrom returns the authenticated user ID and whether one was present.
+func UserIDFrom(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(userIDKey{}).(string)
+	return id, ok
+}
+
+// WithRole returns a copy of ctx carrying the caller's role in the active org.
+func WithRole(ctx context.Context, role string) context.Context {
+	return context.WithValue(ctx, roleKey{}, role)
+}
+
+// RoleFrom returns the caller's role in the active org and whether one was set.
+func RoleFrom(ctx context.Context) (string, bool) {
+	role, ok := ctx.Value(roleKey{}).(string)
+	return role, ok
+}

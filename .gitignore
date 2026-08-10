@@ -1,0 +1,11 @@
+# Secrets — .env holds real values; .env.example is the committed template.
+.env
+
+# Build and test output
+bin/
+coverage.out
+
+# Editor state
+.idea/
+.vscode/
+.DS_Store

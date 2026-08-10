@@ -1,0 +1,89 @@
+# Beacon CI.
+#
+# Course mapping: Chapter 43 — CI/CD. Three jobs, all on push + PR:
+#   lint-build-unit : gofmt, vet, build, and the unit tests (integration/e2e
+#                     tests auto-SKIP here because TEST_DATABASE_URL is unset).
+#   integration     : the same `go test ./...` against a postgres:16 service
+#                     container, so the env-gated tests run for real.
+#   docker          : build the image to prove the Dockerfile works (no push).
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-build-unit:
+    name: lint, build, unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.4"
+          cache: true # module + build cache keyed on go.sum
+
+      - name: gofmt (fail if anything is unformatted)
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files are not gofmt-clean:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go build
+        run: go build ./...
+
+      - name: go test (unit; integration/e2e auto-skip)
+        run: go test ./...
+
+  integration:
+    name: integration + e2e (real Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: beacon
+          POSTGRES_PASSWORD: beacon
+          POSTGRES_DB: beacon_test
+        ports:
+          - 5432:5432
+        # Wait until Postgres is accepting connections before the steps run.
+        options: >-
+          --health-cmd "pg_isready -U beacon"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://beacon:beacon@localhost:5432/beacon_test?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.23.4"
+          cache: true
+
+      - name: go test (integration + e2e now run for real)
+        run: go test ./...
+
+  docker:
+    name: docker build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image (proves the Dockerfile; no push)
+        run: docker build -t beacon-api:ci .

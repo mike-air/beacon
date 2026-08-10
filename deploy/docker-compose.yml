@@ -1,0 +1,63 @@
+# Local dependencies for Beacon. Postgres is the only hard requirement; Mailpit
+# (Ch 23, captures outgoing email at http://localhost:8025) and MinIO (Ch 22,
+# S3-compatible storage, console at http://localhost:9001) are dev conveniences
+# for the Phase-3 boundaries. The service boots fine with only Postgres — email
+# falls back to the log sender and attachment endpoints return 501 until you set
+# the matching S3_*/SMTP_* env vars in .env.
+#
+#   docker compose -f deploy/docker-compose.yml up -d
+#
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: beacon-postgres
+    environment:
+      POSTGRES_USER: beacon
+      POSTGRES_PASSWORD: beacon
+      POSTGRES_DB: beacon
+    ports:
+      - "5432:5432"
+    volumes:
+      - beacon_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beacon -d beacon"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # Mailpit — a throwaway SMTP server that swallows every email and shows it in a
+  # web UI. Point SMTP_HOST=localhost SMTP_PORT=1025 at it (Ch 23).
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: beacon-mailpit
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web UI
+    environment:
+      MP_MAX_MESSAGES: 500
+      MP_SMTP_AUTH_ALLOW_INSECURE: "true"
+
+  # MinIO — S3-compatible object storage for attachments (Ch 22). Create the
+  # bucket once: `mc alias set local http://localhost:9000 minioadmin minioadmin
+  # && mc mb local/beacon`, or via the console at http://localhost:9001.
+  minio:
+    image: minio/minio:latest
+    container_name: beacon-minio
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000" # S3 API
+      - "9001:9001" # web console
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - beacon_miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  beacon_pgdata:
+  beacon_miniodata:
