@@ -5,19 +5,36 @@
  * rewriting the rest of the column. The whole scheme rests on one fact: there
  * is always a number between any two distinct floats — until there is not.
  *
- * Halving the gap every time means about 50 insertions into the SAME slot
- * before two positions become indistinguishable in float64. That is far more
- * than a person does by hand and far less than a script does, so
- * `needsRebalance` exists to say when the column has to be renumbered. Beacon
- * has no bulk-reorder endpoint yet (see DEVIATIONS.md), so today that is a
- * warning rather than a repair.
+ * Halving the gap every time means 1,084 insertions into the SAME slot before
+ * two positions are genuinely indistinguishable in float64. `needsRebalance`
+ * exists to warn well before that. Beacon has no bulk-reorder endpoint yet
+ * (see DEVIATIONS.md), so today it is a warning rather than a repair.
+ *
+ * The threshold is RELATIVE, not absolute, and that matters more than it
+ * looks. An absolute floor measures the wrong thing, because the spacing
+ * between representable doubles grows with magnitude:
+ *
+ *   position 1e3   one ULP is 1.1e-13
+ *   position 1e9   one ULP is 1.2e-07
+ *   position 1e12  one ULP is 1.2e-04
+ *
+ * A fixed 1e-6 floor is 8.8e15 ULPs of headroom near 1e3 — it would warn
+ * about a thousand inserts too early — and SMALLER than one ULP by 1e12,
+ * where two positions collide before the check could ever fire. One constant
+ * cannot be both. Scaling by the magnitude gives ~7,500 ULPs of headroom at
+ * every size, which is the property actually wanted.
  */
 
 /** The gap between freshly-appended cards. Wide, so there is room to insert. */
 export const GAP = 1000;
 
-/** Below this, two adjacent positions are close enough to worry about. */
-const MIN_GAP = 1e-6;
+/**
+ * Warn when a gap shrinks to this fraction of the position's own magnitude.
+ * 2^-40 leaves ~7,500 representable doubles between neighbours at any scale —
+ * far too tight to have arrived at by hand, far too loose to be a real
+ * collision.
+ */
+const MIN_RELATIVE_GAP = 2 ** -40;
 
 /** Append: after everything currently in the column. */
 export function positionAtEnd(sorted: number[]): number {
@@ -47,7 +64,14 @@ export function positionAt(sorted: number[], index: number): number {
 /** True when the column's gaps have collapsed far enough to need renumbering. */
 export function needsRebalance(sorted: number[]): boolean {
   for (let i = 1; i < sorted.length; i++) {
-    if (sorted[i]! - sorted[i - 1]! < MIN_GAP) return true;
+    const lower = sorted[i - 1]!;
+    const upper = sorted[i]!;
+    // Scale by the larger neighbour: that is where the doubles are sparsest,
+    // so it is the side that runs out of room first. The floor of 1 keeps the
+    // test meaningful for positions between 0 and 1, which prepending
+    // produces by halving toward zero.
+    const threshold = Math.max(Math.abs(upper), 1) * MIN_RELATIVE_GAP;
+    if (upper - lower < threshold) return true;
   }
   return false;
 }

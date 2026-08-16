@@ -67,4 +67,28 @@ insertions means one PATCH per card. Until that exists, moving a card writes a
 midpoint position for that card alone, which is correct but degrades — the
 gaps halve each time until floats run out of room.
 
-The rebalance endpoint is the fix, and it belongs on the server.
+The rebalance endpoint is the fix, and it belongs on the server. A knowledge
+graph over both repos made the shape of the hole visible: `needsRebalance()`
+has an edge to the client's whole task API and it resolves to nothing, because
+the call that would repair the condition it detects does not exist. The
+detector reaches a toast; the sibling path reaches a `PATCH`.
+
+## 5. Two things the server documents but does not implement
+
+Neither is a client bug, and neither can be fixed from this side.
+
+**Optimistic locking.** Beacon's PRD glossary defines it — "the mechanism that
+rejects a save if the record changed since you last read it" — and nothing
+implements it. No migration adds a `version` column, `Task` carries no version
+field, and no endpoint accepts `If-Match`. Writes are last-write-wins.
+
+That is load-bearing for the board specifically. Two people dragging the same
+card overwrite each other silently, and `useMoveTask` has no conflict branch
+because the server offers nothing to branch on. The optimistic update is
+optimistic about the network, not about concurrency.
+
+**A per-upstream rate limit.** `docs/runbooks/upstream-429.md` used to tell an
+operator to set `BEACON_STRIPE_RPS`, which no Go file reads and which gates a
+payments integration Beacon does not have. That has been corrected in the
+runbook, but the underlying gap is real: there is no way to throttle Beacon's
+outbound calls except `WORKER_CONCURRENCY`.

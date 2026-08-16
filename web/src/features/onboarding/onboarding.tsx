@@ -27,6 +27,7 @@ import { cn } from "@/lib/cn";
 import { FormError } from "@/features/auth/form-error";
 import { useSubmit } from "@/features/auth/use-submit";
 import { setActiveOrg } from "@/features/org/active-org";
+import { GAP } from "@/features/board/position";
 
 const STEPS = ["Organisation", "Team", "Project", "First task"] as const;
 
@@ -69,7 +70,8 @@ function Frame({ step, children }: { step: number; children: React.ReactNode }) 
   return (
     <div className="flex min-h-screen flex-col bg-sunken">
       <header className="px-6 py-5">
-        <Wordmark live />
+        {/* No org yet, so no stream to report. See auth-layout.tsx. */}
+        <Wordmark />
       </header>
       <main className="flex flex-1 justify-center px-6 pb-20 pt-4">
         <div className="w-full max-w-md">
@@ -285,7 +287,7 @@ function StepTask({
             await tasksApi.create(orgID, projectID, {
               title: v.title,
               status: "todo",
-              position: 1000,
+              position: GAP,
             });
           });
           if (ok) onDone();
