@@ -35,7 +35,11 @@ type RegisterWebhookInput struct {
 	Body struct {
 		URL string `json:"url" format:"uri" maxLength:"2000" required:"true"`
 		// Empty means every event.
-		Events []string `json:"events" doc:"Empty means every event. Beacon publishes task.created, task.updated and task.deleted."`
+		// A REQUEST field, so nullable is left alone deliberately: a client
+		// may legitimately send null, and the server treats null and [] the
+		// same way — every event. Being strict here would reject a request
+		// that means exactly what it says.
+		Events []string `json:"events,omitempty" doc:"Empty means every event. Beacon publishes task.created, task.updated and task.deleted."`
 	}
 }
 

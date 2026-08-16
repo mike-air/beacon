@@ -52,7 +52,7 @@ type Task struct {
 	OrgID     string    `json:"org_id"`
 	ProjectID string    `json:"project_id"`
 	Title     string    `json:"title"`
-	Status    string    `json:"status"`
+	Status    string    `json:"status" enum:"todo,in_progress,done"`
 	Position  float64   `json:"position"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`

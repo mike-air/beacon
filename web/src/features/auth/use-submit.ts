@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { UseFormSetError, FieldValues, Path } from "react-hook-form";
-import { ApiError } from "@/api/errors";
+import { BeaconError } from "@beacon/sdk";
 
 /**
  * One submit handler for every form in the app.
@@ -23,7 +23,7 @@ export function useSubmit<T extends FieldValues>(
       await fn();
       return true;
     } catch (e) {
-      if (e instanceof ApiError && e.isValidation) {
+      if (e instanceof BeaconError && e.isValidation) {
         const unmatched: string[] = [];
         for (const [field, message] of Object.entries(e.fieldErrors())) {
           if ((knownFields as readonly string[]).includes(field)) {
@@ -34,7 +34,7 @@ export function useSubmit<T extends FieldValues>(
         }
         setSubmitError(
           unmatched.length > 0
-            ? new ApiError({
+            ? new BeaconError({
                 status: e.status,
                 code: e.code,
                 message: unmatched.join(", "),

@@ -73,14 +73,14 @@ type Membership struct {
 	ID        string    `json:"id"`
 	UserID    string    `json:"user_id"`
 	OrgID     string    `json:"org_id"`
-	Role      string    `json:"role"`
+	Role      string    `json:"role" enum:"owner,admin,member"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
 // OrgWithRole is an org plus the caller's role in it (for ListForUser).
 type OrgWithRole struct {
 	Org
-	Role string `json:"role"`
+	Role string `json:"role" enum:"owner,admin,member"`
 }
 
 // Member is a membership joined with the user's identity (for ListMembers).
@@ -88,7 +88,7 @@ type Member struct {
 	UserID string `json:"user_id"`
 	Email  string `json:"email"`
 	Name   string `json:"name"`
-	Role   string `json:"role"`
+	Role   string `json:"role" enum:"owner,admin,member"`
 }
 
 // Repo is the orgs/memberships repository backed by sqlc-generated queries.

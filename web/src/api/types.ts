@@ -1,32 +1,53 @@
 /**
- * Friendly names for the generated schema.
+ * Friendly names for the SDK's generated types, plus the handful of domain
+ * facts the client needs that the contract does not carry.
  *
- * Nothing in the app imports schema.d.ts directly — it imports these. When the
- * server changes, `npm run generate:api` regenerates schema.d.ts and every
+ * Nothing in the app imports from @beacon/sdk/generated directly — it imports
+ * these. When the server changes, `make sdk` regenerates the package and every
  * mismatch surfaces here first, in one file, instead of in forty components.
  */
-import type { components } from "./schema";
+import type {
+  Attachment as SdkAttachment,
+  AttachmentEnvelope as SdkAttachmentEnvelope,
+  Comment as SdkComment,
+  FieldError as SdkFieldError,
+  Hit as SdkHit,
+  Member as SdkMember,
+  Membership as SdkMembership,
+  Org as SdkOrg,
+  OrgWithRole as SdkOrgWithRole,
+  PrefsResponse,
+  Project as SdkProject,
+  SearchResult as SdkSearchResult,
+  Task as SdkTask,
+  User as SdkUser,
+  Webhook as SdkWebhook,
+} from "@beacon/sdk";
 
-type S = components["schemas"];
+export type User = SdkUser;
+export type Org = SdkOrg;
+export type OrgWithRole = SdkOrgWithRole;
+export type Member = SdkMember;
+export type Membership = SdkMembership;
+export type Project = SdkProject;
+export type Task = SdkTask;
+export type Comment = SdkComment;
+export type Attachment = SdkAttachment;
+export type AttachmentEnvelope = SdkAttachmentEnvelope;
+export type Webhook = SdkWebhook;
+export type SearchHit = SdkHit;
+export type SearchResult = SdkSearchResult;
+export type Preferences = PrefsResponse;
+export type FieldError = SdkFieldError;
 
-export type User = S["User"];
-export type Org = S["Org"];
-export type OrgWithRole = S["OrgWithRole"];
-export type Role = S["Role"];
-export type Member = S["Member"];
-export type Membership = S["Membership"];
-export type Project = S["Project"];
-export type Task = S["Task"];
-export type TaskStatus = S["TaskStatus"];
-export type Comment = S["Comment"];
-export type Attachment = S["Attachment"];
-export type AttachmentEnvelope = S["AttachmentEnvelope"];
-export type Webhook = S["Webhook"];
-export type SearchHit = S["SearchHit"];
-export type SearchResult = S["SearchResult"];
-export type Preferences = S["Preferences"];
-export type FieldError = S["FieldError"];
-export type ProjectList = S["ProjectList"];
+/**
+ * Role and TaskStatus are derived from the generated types rather than
+ * declared here. When Beacon adds a fourth status the union widens by itself
+ * and every non-exhaustive switch over it becomes a compile error — which is
+ * the whole point of generating types instead of writing them.
+ */
+export type Role = NonNullable<SdkMember["role"]>;
+export type TaskStatus = NonNullable<SdkTask["status"]>;
 
 /** The three columns of the board, in the order they are shown. */
 export const TASK_STATUSES = ["todo", "in_progress", "done"] as const satisfies readonly TaskStatus[];

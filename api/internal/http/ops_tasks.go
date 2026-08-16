@@ -41,10 +41,10 @@ type CreateTaskInput struct {
 	IdempotencyHeader
 	Body struct {
 		Title  string `json:"title" minLength:"1" maxLength:"200" required:"true"`
-		Status string `json:"status" enum:"todo,in_progress,done" doc:"Defaults to todo"`
+		Status string `json:"status,omitempty" enum:"todo,in_progress,done" doc:"Defaults to todo"`
 		// A float so a card can be inserted between two others without
 		// renumbering the column.
-		Position float64 `json:"position"`
+		Position float64 `json:"position,omitempty"`
 	}
 }
 
@@ -58,7 +58,7 @@ type UpdateTaskInput struct {
 		// status would blank the title.
 		Title    string  `json:"title" minLength:"1" maxLength:"200" required:"true"`
 		Status   string  `json:"status" enum:"todo,in_progress,done" required:"true"`
-		Position float64 `json:"position"`
+		Position float64 `json:"position,omitempty"`
 	}
 }
 
@@ -143,9 +143,7 @@ func (s *Server) registerTasks(api huma.API, g gates) {
 		if err != nil {
 			return nil, s.asHumaError(ctx, err)
 		}
-		return &ListTasksOutput{Body: ListBody[tasks.Task]{
-			Items: list, Limit: in.Limit, Offset: in.Offset,
-		}}, nil
+		return &ListTasksOutput{Body: listBody(list, in.Limit, in.Offset)}, nil
 	})
 
 	huma.Register(api, huma.Operation{

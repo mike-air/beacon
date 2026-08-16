@@ -1,8 +1,17 @@
 /**
- * Every URL the app knows, in one place, and every response parsed on the way
- * out. A component never builds a path and never sees an unvalidated object.
+ * Every call the app makes, in one place.
+ *
+ * This is a thin naming layer over @beacon/sdk. The SDK already knows the
+ * URLs, the shapes and the docs; what it does not know is which calls THIS
+ * app makes, or that a page of tasks should be fetched a hundred at a time.
+ * Keeping that here means a component never assembles a request, and the
+ * whole surface the app depends on is one readable file.
+ *
+ * Responses are still parsed at the boundary. A generated type is a claim
+ * about a server you do not control; a parser is a check. The two are kept in
+ * step by the compile-time assertions in parsers.ts.
  */
-import { api, type RequestOptions } from "./client";
+import { beacon, unwrap } from "@beacon/sdk";
 import {
   attachmentSchema,
   commentSchema,
@@ -18,32 +27,18 @@ import {
   userSchema,
   webhookSchema,
 } from "./parsers";
-import type {
-  AttachmentEnvelope,
-  Org,
-  Preferences,
-  Project,
-  Role,
-  Task,
-  TaskStatus,
-  User,
-} from "./types";
-
-const org = (orgID: string) => `/v1/orgs/${orgID}`;
-const project = (orgID: string, projectID: string) => `${org(orgID)}/projects/${projectID}`;
-const task = (orgID: string, projectID: string, taskID: string) =>
-  `${project(orgID, projectID)}/tasks/${taskID}`;
+import type { AttachmentEnvelope, Preferences, Project, Role, Task, TaskStatus, User } from "./types";
 
 type Page = { limit?: number; offset?: number };
 
 // ---- auth ------------------------------------------------------------------
 
 export const auth = {
-  signup: (body: { email: string; name: string; password: string }) =>
-    api.post<unknown>("/v1/auth/signup", body).then(parser(userSchema, "User")),
+  signup: (body: { email: string; name: string; password: string }): Promise<User> =>
+    unwrap(beacon.signup({ body })).then(parser(userSchema, "User")),
 
   login: (body: { email: string; password: string }) =>
-    api.post<{ token: string; user: unknown }>("/v1/auth/login", body).then((r) => ({
+    unwrap(beacon.login({ body })).then((r) => ({
       token: r.token,
       user: parser(userSchema, "User")(r.user),
     })),
@@ -52,119 +47,120 @@ export const auth = {
 // ---- me --------------------------------------------------------------------
 
 export const me = {
-  get: (opts?: RequestOptions): Promise<User> =>
-    api.get<unknown>("/v1/me", opts).then(parser(userSchema, "User")),
+  get: (): Promise<User> => unwrap(beacon.getMe()).then(parser(userSchema, "User")),
 
   preferences: (): Promise<Preferences> =>
-    api.get<unknown>("/v1/me/preferences").then(parser(preferencesSchema, "Preferences")),
+    unwrap(beacon.getPreferences()).then(parser(preferencesSchema, "Preferences")),
 
+  /**
+   * Returns the updated preferences, including what the cascade resolved for
+   * this request — so the caller learns what the change actually did without
+   * a second round trip.
+   */
   setPreferences: (body: { locale?: string; timezone?: string }): Promise<Preferences> =>
-    api.patch<unknown>("/v1/me/preferences", body).then(parser(preferencesSchema, "Preferences")),
+    unwrap(beacon.setPreferences({ body })).then(parser(preferencesSchema, "Preferences")),
 };
 
 // ---- orgs ------------------------------------------------------------------
 
 export const orgs = {
   list: (page?: Page) =>
-    api.get<unknown>("/v1/orgs", { query: { ...page } }).then(pageParser(orgWithRoleSchema, "Orgs")),
+    unwrap(beacon.listOrgs({ query: { ...page } })).then(pageParser(orgWithRoleSchema, "Orgs")),
 
-  create: (body: { name: string }, opts?: RequestOptions): Promise<Org> =>
-    api.post<unknown>("/v1/orgs", body, opts).then(parser(orgSchema, "Org")),
+  create: (body: { name: string }) =>
+    unwrap(beacon.createOrg({ body })).then(parser(orgSchema, "Org")),
 
   members: (orgID: string, page?: Page) =>
-    api
-      .get<unknown>(`${org(orgID)}/members`, { query: { ...page } })
-      .then(pageParser(memberSchema, "Members")),
+    unwrap(beacon.listMembers({ path: { orgID }, query: { ...page } })).then(
+      pageParser(memberSchema, "Members"),
+    ),
 
-  addMember: (orgID: string, body: { email: string; role: Role }, opts?: RequestOptions) =>
-    api.post<unknown>(`${org(orgID)}/members`, body, opts),
+  addMember: (orgID: string, body: { email: string; role: Role }) =>
+    unwrap(beacon.addMember({ path: { orgID }, body })),
 
-  search: (orgID: string, q: string, page?: Page, opts?: RequestOptions) =>
-    api
-      .get<unknown>(`${org(orgID)}/search`, { ...opts, query: { q, ...page } })
-      .then(parser(searchResultSchema, "Search")),
+  search: (orgID: string, q: string, page?: Page, opts?: { signal?: AbortSignal }) =>
+    unwrap(
+      beacon.search({ path: { orgID }, query: { q, ...page }, signal: opts?.signal }),
+    ).then(parser(searchResultSchema, "Search")),
 };
 
 // ---- projects --------------------------------------------------------------
 
 export const projects = {
   /**
-   * The `board` marker only appears on the v2 branch of the `new_board_ui`
-   * experiment. It is returned raw alongside the parsed rows so the caller can
-   * render the arm the SERVER put this user in — the client never decides.
+   * `board` only appears on the v2 arm of the new_board_ui experiment. It is
+   * returned raw beside the parsed rows so the caller renders the arm the
+   * SERVER put this user in — the client never decides.
    */
   list: async (orgID: string, page?: Page) => {
-    const raw = await api.get<{ board?: string }>(`${org(orgID)}/projects`, { query: { ...page } });
+    const raw = await unwrap(beacon.listProjects({ path: { orgID }, query: { ...page } }));
     const parsed = pageParser(projectSchema, "Projects")(raw);
     return { ...parsed, board: raw.board === "v2" ? ("v2" as const) : ("v1" as const) };
   },
 
   get: (orgID: string, projectID: string): Promise<Project> =>
-    api.get<unknown>(project(orgID, projectID)).then(parser(projectSchema, "Project")),
+    unwrap(beacon.getProject({ path: { orgID, projectID } })).then(parser(projectSchema, "Project")),
 
-  create: (orgID: string, body: { name: string }, opts?: RequestOptions): Promise<Project> =>
-    api.post<unknown>(`${org(orgID)}/projects`, body, opts).then(parser(projectSchema, "Project")),
+  create: (orgID: string, body: { name: string }): Promise<Project> =>
+    unwrap(beacon.createProject({ path: { orgID }, body })).then(parser(projectSchema, "Project")),
 
   update: (orgID: string, projectID: string, body: { name: string }): Promise<Project> =>
-    api.patch<unknown>(project(orgID, projectID), body).then(parser(projectSchema, "Project")),
+    unwrap(beacon.updateProject({ path: { orgID, projectID }, body })).then(
+      parser(projectSchema, "Project"),
+    ),
 
-  remove: (orgID: string, projectID: string) => api.del<void>(project(orgID, projectID)),
+  remove: (orgID: string, projectID: string) =>
+    unwrap(beacon.deleteProject({ path: { orgID, projectID } })),
 };
 
 // ---- tasks -----------------------------------------------------------------
 
 export const tasks = {
   list: (orgID: string, projectID: string, page?: Page) =>
-    api
-      .get<unknown>(`${project(orgID, projectID)}/tasks`, { query: { limit: 100, ...page } })
-      .then(pageParser(taskSchema, "Tasks")),
+    unwrap(
+      beacon.listTasks({ path: { orgID, projectID }, query: { limit: 100, ...page } }),
+    ).then(pageParser(taskSchema, "Tasks")),
 
   get: (orgID: string, projectID: string, taskID: string): Promise<Task> =>
-    api.get<unknown>(task(orgID, projectID, taskID)).then(parser(taskSchema, "Task")),
+    unwrap(beacon.getTask({ path: { orgID, projectID, taskID } })).then(parser(taskSchema, "Task")),
 
   create: (
     orgID: string,
     projectID: string,
     body: { title: string; status?: TaskStatus; position?: number },
-    opts?: RequestOptions,
   ): Promise<Task> =>
-    api
-      .post<unknown>(`${project(orgID, projectID)}/tasks`, body, opts)
-      .then(parser(taskSchema, "Task")),
+    unwrap(beacon.createTask({ path: { orgID, projectID }, body })).then(
+      parser(taskSchema, "Task"),
+    ),
 
-  /** PATCH is a full replacement of the mutable fields — both are required. */
+  /** A full replacement of the mutable fields — title and status are both required. */
   update: (
     orgID: string,
     projectID: string,
     taskID: string,
     body: { title: string; status: TaskStatus; position?: number },
-    opts?: RequestOptions,
   ): Promise<Task> =>
-    api.patch<unknown>(task(orgID, projectID, taskID), body, opts).then(parser(taskSchema, "Task")),
+    unwrap(beacon.updateTask({ path: { orgID, projectID, taskID }, body })).then(
+      parser(taskSchema, "Task"),
+    ),
 
   remove: (orgID: string, projectID: string, taskID: string) =>
-    api.del<void>(task(orgID, projectID, taskID)),
+    unwrap(beacon.deleteTask({ path: { orgID, projectID, taskID } })),
 
   comments: (orgID: string, projectID: string, taskID: string, page?: Page) =>
-    api
-      .get<unknown>(`${task(orgID, projectID, taskID)}/comments`, { query: { limit: 100, ...page } })
-      .then(pageParser(commentSchema, "Comments")),
+    unwrap(
+      beacon.listComments({ path: { orgID, projectID, taskID }, query: { limit: 100, ...page } }),
+    ).then(pageParser(commentSchema, "Comments")),
 
-  comment: (
-    orgID: string,
-    projectID: string,
-    taskID: string,
-    body: { body: string },
-    opts?: RequestOptions,
-  ) =>
-    api
-      .post<unknown>(`${task(orgID, projectID, taskID)}/comments`, body, opts)
-      .then(parser(commentSchema, "Comment")),
+  comment: (orgID: string, projectID: string, taskID: string, body: { body: string }) =>
+    unwrap(beacon.createComment({ path: { orgID, projectID, taskID }, body })).then(
+      parser(commentSchema, "Comment"),
+    ),
 
   attachments: (orgID: string, projectID: string, taskID: string) =>
-    api
-      .get<unknown>(`${task(orgID, projectID, taskID)}/attachments`)
-      .then(pageParser(attachmentSchema, "Attachments")),
+    unwrap(beacon.listAttachments({ path: { orgID, projectID, taskID } })).then(
+      pageParser(attachmentSchema, "Attachments"),
+    ),
 
   createAttachment: (
     orgID: string,
@@ -172,36 +168,34 @@ export const tasks = {
     taskID: string,
     body: { filename: string; content_type: string; size: number },
   ): Promise<AttachmentEnvelope> =>
-    api.post<AttachmentEnvelope>(`${task(orgID, projectID, taskID)}/attachments`, body),
+    unwrap(beacon.createAttachment({ path: { orgID, projectID, taskID }, body })),
 
   getAttachment: (orgID: string, projectID: string, taskID: string, attachmentID: string) =>
-    api.get<AttachmentEnvelope>(
-      `${task(orgID, projectID, taskID)}/attachments/${attachmentID}`,
-    ),
+    unwrap(beacon.getAttachment({ path: { orgID, projectID, taskID, attachmentID } })),
 };
 
 // ---- webhooks --------------------------------------------------------------
 
 export const webhooks = {
   list: (orgID: string) =>
-    api.get<unknown>(`${org(orgID)}/webhooks`).then(pageParser(webhookSchema, "Webhooks")),
+    unwrap(beacon.listWebhooks({ path: { orgID } })).then(pageParser(webhookSchema, "Webhooks")),
 
-  register: (orgID: string, body: { url: string; events?: string[] }, opts?: RequestOptions) =>
-    api.post<unknown>(`${org(orgID)}/webhooks`, body, opts).then(parser(webhookSchema, "Webhook")),
+  register: (orgID: string, body: { url: string; events?: string[] }) =>
+    unwrap(beacon.registerWebhook({ path: { orgID }, body })).then(
+      parser(webhookSchema, "Webhook"),
+    ),
 
   remove: (orgID: string, webhookID: string) =>
-    api.del<void>(`${org(orgID)}/webhooks/${webhookID}`),
+    unwrap(beacon.deleteWebhook({ path: { orgID, webhookID } })),
 };
 
 /**
- * The SSE endpoint.
+ * The SSE path.
  *
- * Beacon's requireAuth reads the token from the Authorization header and
- * nowhere else, and the native EventSource cannot set headers. The usual
- * workaround — `?access_token=` — puts a credential in a URL, where it lands
- * in access logs and proxy caches. So this app streams with fetch instead;
- * see sse.ts.
+ * Not an SDK method: the stream is not a request and a response, so it is not
+ * a generated operation. sse.ts consumes it with fetch, because the token goes
+ * in the Authorization header and EventSource cannot set one.
  */
 export function eventsPath(orgID: string): string {
-  return `${org(orgID)}/events`;
+  return `/v1/orgs/${orgID}/events`;
 }

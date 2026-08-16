@@ -17,7 +17,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { tasks as tasksApi } from "@/api/endpoints";
 import { keys } from "@/api/queries";
-import { ApiError } from "@/api/errors";
+import { BeaconError } from "@beacon/sdk";
 import { useToast } from "@/components/ui/toast";
 import type { Task, TaskStatus } from "@/api/types";
 
@@ -51,13 +51,13 @@ export function useMoveTask(orgID: string, projectID: string) {
 
     onError: (error, _vars, context) => {
       if (context?.previous) qc.setQueryData(key, context.previous);
-      const rateLimited = error instanceof ApiError && error.isRateLimited;
+      const rateLimited = error instanceof BeaconError && error.isRateLimited;
       toast({
         tone: "danger",
         title: "The card moved back",
         description: rateLimited
-          ? `Too many changes at once. Try again in ${(error as ApiError).retryAfter ?? 5}s.`
-          : error instanceof ApiError
+          ? `Too many changes at once. Try again in ${(error as BeaconError).retryAfter ?? 5}s.`
+          : error instanceof BeaconError
             ? error.message
             : "The server did not accept the move.",
       });

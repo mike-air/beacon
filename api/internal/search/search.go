@@ -74,7 +74,7 @@ type SearchInput struct {
 }
 
 type SearchResult struct {
-	Hits []Hit `json:"hits"`
+	Hits []Hit `json:"hits" nullable:"false"`
 	// Source is "postgres" or "meili". It exists so an operator reading a
 	// response can tell instantly whether the fallback fired.
 	Source string `json:"source"`

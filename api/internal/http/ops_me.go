@@ -39,10 +39,10 @@ type SetPreferencesInput struct {
 	Body struct {
 		// A BCP-47 tag ("de", "pt-BR"). Empty clears the preference and hands
 		// the decision back to the org default and Accept-Language.
-		Locale string `json:"locale" maxLength:"35"`
+		Locale string `json:"locale,omitempty" maxLength:"35"`
 		// An IANA name ("Europe/Berlin"), never an offset — an offset is a
 		// fact about one instant, and a zone is the rule that produced it.
-		Timezone string `json:"timezone" maxLength:"64"`
+		Timezone string `json:"timezone,omitempty" maxLength:"64"`
 	}
 }
 

@@ -3,6 +3,10 @@ package webhooks
 import (
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
+
+	"beacon/internal/db"
 )
 
 // Course mapping: Chapter 24 — HMAC-SHA256 signing. A receiver re-signs the body
@@ -46,5 +50,29 @@ func TestSignIsDeterministic(t *testing.T) {
 	body := []byte("payload")
 	if Sign(secret, body) != Sign(secret, body) {
 		t.Fatal("Sign should be deterministic for the same input")
+	}
+}
+
+// TestSecretIsRedactedExceptOnCreate pins the rule the UI states out loud:
+// "It is shown once. Beacon cannot show it again."
+//
+// It did not used to be true. toWebhook copied the secret through, so listing
+// webhooks returned the full HMAC key for every one of them on every page load
+// of the settings screen.
+func TestSecretIsRedactedExceptOnCreate(t *testing.T) {
+	row := db.Webhook{
+		ID:     uuid.New(),
+		OrgID:  uuid.New(),
+		Url:    "https://example.com/hook",
+		Secret: "a-real-signing-secret",
+		Events: []string{"task.created"},
+		Active: true,
+	}
+
+	if got := toWebhook(row).Secret; got != "" {
+		t.Errorf("toWebhook leaked the secret: %q", got)
+	}
+	if got := toWebhookWithSecret(row).Secret; got != row.Secret {
+		t.Errorf("create must return the secret in full, got %q", got)
 	}
 }

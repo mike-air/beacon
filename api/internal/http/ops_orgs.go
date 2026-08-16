@@ -182,6 +182,11 @@ func (s *Server) registerOrgs(api huma.API, g gates) {
 		if err != nil {
 			return nil, s.asHumaError(ctx, err)
 		}
+		// A search that matched nothing must answer [] rather than null, for
+		// the same reason every list does.
+		if res.Hits == nil {
+			res.Hits = []search.Hit{}
+		}
 		return &SearchOutput{Body: res}, nil
 	})
 }
@@ -201,5 +206,5 @@ func page[T any](items []T, limit, offset int) ListBody[T] {
 	if end > len(items) {
 		end = len(items)
 	}
-	return ListBody[T]{Items: items[offset:end], Limit: limit, Offset: offset}
+	return listBody(items[offset:end], limit, offset)
 }

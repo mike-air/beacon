@@ -29,7 +29,7 @@ type ListProjectsInput struct {
 // what makes it optional in the generated client too: absent means v1.
 type ListProjectsOutput struct {
 	Body struct {
-		Items  []projects.Project `json:"items"`
+		Items  []projects.Project `json:"items" nullable:"false"`
 		Limit  int                `json:"limit"`
 		Offset int                `json:"offset"`
 		Board  string             `json:"board,omitempty" enum:"v2" doc:"Present only on the v2 arm of the new_board_ui experiment. Absent means v1."`
@@ -77,6 +77,11 @@ func (s *Server) registerProjects(api huma.API, g gates) {
 			return nil, s.asHumaError(ctx, err)
 		}
 		out := &ListProjectsOutput{}
+		// Same nil-slice rule as listBody; this envelope carries an extra
+		// field so it cannot use the shared constructor.
+		if list == nil {
+			list = []projects.Project{}
+		}
 		out.Body.Items = list
 		out.Body.Limit = in.Limit
 		out.Body.Offset = in.Offset

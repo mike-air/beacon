@@ -1,13 +1,17 @@
 /**
  * One error type for every failed request.
  *
- * The server's envelope is `{"error":{"code","message","fields"}}` and `code`
- * is the stable part. Components branch on `code`; they show `message`. They
- * never parse the message, because that is a string a translator will change.
+ * The generated SDK returns `{ data, error, response }` rather than throwing,
+ * which is a reasonable default and the wrong ergonomics for an application:
+ * every call site would need the same four lines to decide whether it had an
+ * answer. The wrapper in client.ts throws this instead.
+ *
+ * `code` is the stable part of Beacon's error envelope. Branch on it. Never
+ * branch on `message` — that is a string a translator will change.
  */
-import type { FieldError } from "./types";
+import type { FieldError } from "./generated";
 
-export class ApiError extends Error {
+export class BeaconError extends Error {
   readonly status: number;
   readonly code: string;
   readonly fields: FieldError[];
@@ -24,7 +28,7 @@ export class ApiError extends Error {
     requestId?: string;
   }) {
     super(init.message);
-    this.name = "ApiError";
+    this.name = "BeaconError";
     this.status = init.status;
     this.code = init.code;
     this.fields = init.fields ?? [];
@@ -32,54 +36,47 @@ export class ApiError extends Error {
     this.requestId = init.requestId;
   }
 
-  /** The token is gone or expired. The only error the whole app handles globally. */
-  get isUnauthenticated(): boolean {
+  /** The token is gone or expired — the one error handled globally. */
+  get isUnauthenticated() {
     return this.status === 401;
   }
-
-  get isForbidden(): boolean {
+  get isForbidden() {
     return this.status === 403;
   }
-
-  get isValidation(): boolean {
+  get isValidation() {
     return this.status === 422;
   }
-
-  get isRateLimited(): boolean {
+  get isRateLimited() {
     return this.status === 429;
   }
-
   /** The server does not have this feature at all — storage is unconfigured. */
-  get isNotImplemented(): boolean {
+  get isNotImplemented() {
     return this.status === 501;
   }
 
   /**
-   * Retrying a 4xx sends the same broken request again.
+   * Retrying a 4xx sends the same wrong request again.
    *
    * 501 and 505 are the two 5xx codes that are permanent: "this server does
-   * not implement that" and "not this HTTP version". Retrying them is five
-   * round trips to be told the same thing five times — which is exactly what
-   * this client did to /attachments on a Beacon with no storage configured,
-   * until this line existed.
+   * not implement that" and "not this HTTP version". Retrying them is several
+   * round trips to be told the same thing several times — which is exactly
+   * what an earlier version of this client did to /attachments on a Beacon
+   * with no storage configured.
    */
-  get isRetryable(): boolean {
+  get isRetryable() {
     if (this.status === 501 || this.status === 505) return false;
     return this.status === 429 || this.status >= 500;
   }
 
-  /**
-   * Validation failures keyed by field name, ready to hand to react-hook-form.
-   * A field the form does not know about is dropped by the caller, not here.
-   */
+  /** Validation detail keyed by field, ready to hand to a form. */
   fieldErrors(): Record<string, string> {
     const out: Record<string, string> = {};
-    for (const f of this.fields) out[f.field] = f.message;
+    for (const f of this.fields) if (f.field) out[f.field] = f.message ?? "";
     return out;
   }
 }
 
-/** The request never reached the server, or the response was not JSON. */
+/** The request never reached the server, or the response was not readable. */
 export class NetworkError extends Error {
   readonly cause?: unknown;
   constructor(message: string, cause?: unknown) {

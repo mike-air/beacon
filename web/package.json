@@ -10,7 +10,6 @@
     "gen:tokens": "tsx scripts/gen-tokens.ts",
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
-    "generate:api": "openapi-typescript ../beacon/openapi.yaml -o src/api/schema.d.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
@@ -40,7 +39,8 @@
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.54.0",
     "tailwind-merge": "^3.0.0",
-    "zod": "^3.24.0"
+    "zod": "^3.24.0",
+    "@beacon/sdk": "file:../sdk"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

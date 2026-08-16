@@ -19,7 +19,7 @@ type errorBody struct {
 	Message string `json:"message"`
 	// Fields carries per-field detail for validation failures (422). It is
 	// omitted for every other error so the common shape stays unchanged.
-	Fields []fieldError `json:"fields,omitempty"`
+	Fields []fieldError `json:"fields,omitempty" nullable:"false"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

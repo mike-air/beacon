@@ -10,7 +10,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from "@tanstack/react-query";
-import { ApiError } from "./errors";
+import { BeaconError } from "@beacon/sdk";
 import { me, orgs, projects, tasks, webhooks } from "./endpoints";
 import type { Role, TaskStatus } from "./types";
 
@@ -41,7 +41,7 @@ export const keys = {
  * and the client layer has already honoured Retry-After for those.
  */
 export function shouldRetry(failureCount: number, error: unknown): boolean {
-  if (error instanceof ApiError && !error.isRetryable) return false;
+  if (error instanceof BeaconError && !error.isRetryable) return false;
   return failureCount < 2;
 }
 

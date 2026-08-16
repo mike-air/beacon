@@ -15,9 +15,27 @@ import "beacon/internal/orgs"
 // URL. Making it generic means a new list endpoint cannot get the shape wrong
 // without saying so in its type.
 type ListBody[T any] struct {
-	Items  []T `json:"items"`
+	// nullable:"false" because listBody guarantees a non-nil slice. huma
+	// infers nullability from the Go type — every []T can be nil — so without
+	// this the contract advertises a null the server never sends.
+	Items  []T `json:"items" nullable:"false"`
 	Limit  int `json:"limit"`
 	Offset int `json:"offset"`
+}
+
+// listBody builds the envelope, and exists for one reason: a nil Go slice
+// marshals to JSON null.
+//
+// Without this, an empty page answers {"items": null} and a non-empty one
+// answers {"items": [...]}, so every client has to handle two spellings of
+// "nothing here" — and the ones that do not crash on the first empty board a
+// user opens. Constructing the envelope through a function makes the
+// normalisation impossible to forget, which a struct literal does not.
+func listBody[T any](items []T, limit, offset int) ListBody[T] {
+	if items == nil {
+		items = []T{}
+	}
+	return ListBody[T]{Items: items, Limit: limit, Offset: offset}
 }
 
 // Paging is embedded in any input that reads a page. The defaults and the

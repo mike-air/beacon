@@ -1,5 +1,5 @@
 import { AlertTriangle } from "lucide-react";
-import { ApiError, NetworkError } from "@/api/errors";
+import { BeaconError, NetworkError } from "@beacon/sdk";
 
 /**
  * What to say when a submit fails.
@@ -11,7 +11,7 @@ export function FormError({ error }: { error: unknown }) {
   if (!error) return null;
 
   let message: string;
-  if (error instanceof ApiError) {
+  if (error instanceof BeaconError) {
     if (error.isValidation && error.fields.length > 0) return null; // shown per field
     message = error.isRateLimited
       ? `Too many attempts. Try again in ${error.retryAfter ?? 60} seconds.`

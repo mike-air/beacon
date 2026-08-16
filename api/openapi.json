@@ -203,9 +203,7 @@
           }
         },
         "required": [
-          "title",
-          "status",
-          "position"
+          "title"
         ],
         "type": "object"
       },
@@ -219,10 +217,7 @@
             "items": {
               "$ref": "#/components/schemas/FieldError"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "message": {
             "type": "string"
@@ -301,10 +296,7 @@
             "items": {
               "$ref": "#/components/schemas/Attachment"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "limit": {
             "format": "int64",
@@ -329,10 +321,7 @@
             "items": {
               "$ref": "#/components/schemas/Comment"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "limit": {
             "format": "int64",
@@ -357,10 +346,7 @@
             "items": {
               "$ref": "#/components/schemas/Member"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "limit": {
             "format": "int64",
@@ -385,10 +371,7 @@
             "items": {
               "$ref": "#/components/schemas/OrgWithRole"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "limit": {
             "format": "int64",
@@ -413,10 +396,7 @@
             "items": {
               "$ref": "#/components/schemas/Task"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "limit": {
             "format": "int64",
@@ -441,10 +421,7 @@
             "items": {
               "$ref": "#/components/schemas/Webhook"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "limit": {
             "format": "int64",
@@ -476,10 +453,7 @@
             "items": {
               "$ref": "#/components/schemas/Project"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "limit": {
             "format": "int64",
@@ -541,6 +515,11 @@
             "type": "string"
           },
           "role": {
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
             "type": "string"
           },
           "user_id": {
@@ -569,6 +548,11 @@
             "type": "string"
           },
           "role": {
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
             "type": "string"
           },
           "user_id": {
@@ -623,6 +607,11 @@
             "type": "string"
           },
           "role": {
+            "enum": [
+              "owner",
+              "admin",
+              "member"
+            ],
             "type": "string"
           },
           "slug": {
@@ -725,8 +714,7 @@
           }
         },
         "required": [
-          "url",
-          "events"
+          "url"
         ],
         "type": "object"
       },
@@ -737,10 +725,7 @@
             "items": {
               "$ref": "#/components/schemas/Hit"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "source": {
             "type": "string"
@@ -764,10 +749,6 @@
             "type": "string"
           }
         },
-        "required": [
-          "locale",
-          "timezone"
-        ],
         "type": "object"
       },
       "SignupInputBody": {
@@ -815,6 +796,11 @@
             "type": "string"
           },
           "status": {
+            "enum": [
+              "todo",
+              "in_progress",
+              "done"
+            ],
             "type": "string"
           },
           "title": {
@@ -874,8 +860,7 @@
         },
         "required": [
           "title",
-          "status",
-          "position"
+          "status"
         ],
         "type": "object"
       },
@@ -918,10 +903,7 @@
             "items": {
               "type": "string"
             },
-            "type": [
-              "array",
-              "null"
-            ]
+            "type": "array"
           },
           "id": {
             "type": "string"
@@ -940,7 +922,6 @@
           "id",
           "org_id",
           "url",
-          "secret",
           "events",
           "active",
           "created_at"

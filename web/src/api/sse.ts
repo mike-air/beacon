@@ -19,8 +19,10 @@
  * the stream as authoritative will quietly show a stale board. Every event
  * here invalidates a query; the refetch is what is believed.
  */
-import { API_BASE } from "./client";
 import { getToken } from "./session";
+
+/** Where the API lives. The SDK is configured with the same value in main.tsx. */
+export const API_BASE: string = import.meta.env["VITE_API_BASE"] ?? "http://localhost:8080";
 
 export type SseEvent = { type: string; data: unknown };
 

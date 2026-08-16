@@ -39,11 +39,18 @@ const SignatureHeader = "X-Beacon-Signature"
 
 // Webhook is a registered outgoing endpoint for an org.
 type Webhook struct {
-	ID        string    `json:"id"`
-	OrgID     string    `json:"org_id"`
-	URL       string    `json:"url"`
-	Secret    string    `json:"secret"`
-	Events    []string  `json:"events"`
+	ID    string `json:"id"`
+	OrgID string `json:"org_id"`
+	URL   string `json:"url"`
+	// Secret is the HMAC key a receiver uses to verify that a delivery really
+	// came from Beacon. It is returned in full EXACTLY ONCE, in the response
+	// to Create, and is redacted everywhere else — see toWebhook.
+	//
+	// omitempty is load-bearing: it is what makes the field optional in the
+	// generated contract, so a client is told the truth about when to expect
+	// it rather than being handed a type that promises it always arrives.
+	Secret    string    `json:"secret,omitempty"`
+	Events    []string  `json:"events" nullable:"false"`
 	Active    bool      `json:"active"`
 	CreatedAt time.Time `json:"created_at"`
 }
@@ -90,13 +97,42 @@ type Repo struct {
 
 func NewRepo(pool *pgxpool.Pool) *Repo { return &Repo{q: db.New(pool)} }
 
+// toWebhook converts a stored row for RETURNING TO A CLIENT, with the signing
+// secret redacted.
+//
+// It used to copy the secret through, which meant listing webhooks handed the
+// full HMAC key for every one of them to the caller — on every page load of the
+// settings screen. That put a shared credential into browser memory, into any
+// proxy that logs response bodies, into devtools, and into any client-side
+// error report that captured a response. The UI meanwhile told the user the
+// secret was shown once and could never be shown again, which was simply not
+// true.
+//
+// Create is the one place it is legitimate to return, and it says so by using
+// toWebhookWithSecret explicitly.
 func toWebhook(h db.Webhook) Webhook {
+	w := toWebhookWithSecret(h)
+	w.Secret = ""
+	return w
+}
+
+// toWebhookWithSecret includes the signing secret. Only Create may use it.
+func toWebhookWithSecret(h db.Webhook) Webhook {
+	// A nil Go slice marshals to JSON null, so a webhook subscribed to every
+	// event — which is what an empty list means — would answer `"events":
+	// null` while one subscribed to some answered `["task.created"]`. Two
+	// spellings of the same idea is a distinction no client wants and every
+	// client has to handle, so it is normalised here, once.
+	events := h.Events
+	if events == nil {
+		events = []string{}
+	}
 	return Webhook{
 		ID:        h.ID.String(),
 		OrgID:     h.OrgID.String(),
 		URL:       h.Url,
 		Secret:    h.Secret,
-		Events:    h.Events,
+		Events:    events,
 		Active:    h.Active,
 		CreatedAt: h.CreatedAt,
 	}
@@ -120,7 +156,8 @@ func (r *Repo) Create(ctx context.Context, orgID, url string, events []string) (
 	if err != nil {
 		return Webhook{}, fmt.Errorf("webhooks.Create: %w", err)
 	}
-	return toWebhook(h), nil
+	// The one legitimate place the signing secret leaves the server.
+	return toWebhookWithSecret(h), nil
 }
 
 // ListByOrg returns an org's webhooks.

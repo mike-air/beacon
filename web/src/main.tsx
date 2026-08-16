@@ -5,6 +5,7 @@ import "@fontsource/space-grotesk/700.css";
 import "@fontsource/jetbrains-mono/400.css";
 import "./styles/app.css";
 
+import { configureBeacon } from "@beacon/sdk";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider } from "@tanstack/react-router";
 import { StrictMode } from "react";
@@ -15,8 +16,31 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/features/auth/auth-context";
 import { watchTheme } from "@/lib/theme";
 import { router } from "@/routes/router";
+import { clearToken, getToken } from "@/api/session";
 
 watchTheme();
+
+/**
+ * The SDK is configured once, here, before anything renders.
+ *
+ * Everything Beacon-specific about a request — the bearer token, the
+ * Idempotency-Key on mutations, Retry-After on 429, the timeout, and what to
+ * do when the token expires — is declared in this one call. No component ever
+ * assembles a request, and no call site can forget any of it.
+ *
+ * onUnauthenticated is a full document load rather than a route change for the
+ * same reason sign-out is: it guarantees no component state survives an
+ * expired session. Beacon issues one non-refreshable token, so there is
+ * nothing to retry with; ending the session is the only correct response.
+ */
+configureBeacon({
+  baseUrl: import.meta.env["VITE_API_BASE"] ?? "http://localhost:8080",
+  getToken,
+  onUnauthenticated: () => {
+    clearToken();
+    window.location.assign("/sign-in");
+  },
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {

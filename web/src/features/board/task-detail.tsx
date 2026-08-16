@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Paperclip, Send, Trash2, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import { tasks as tasksApi } from "@/api/endpoints";
-import { ApiError } from "@/api/errors";
+import { BeaconError } from "@beacon/sdk";
 import { keys, useAttachments, useComments } from "@/api/queries";
 import { STATUS_LABEL, TASK_STATUSES, type Task, type TaskStatus } from "@/api/types";
 import { Avatar } from "@/components/ui/avatar";
@@ -61,7 +61,7 @@ export function TaskDetail({
       toast({
         tone: "danger",
         title: "Comment not saved",
-        description: e instanceof ApiError ? e.message : "Try again.",
+        description: e instanceof BeaconError ? e.message : "Try again.",
       }),
   });
 
@@ -107,7 +107,7 @@ export function TaskDetail({
       toast({ tone: "success", title: "Uploaded", description: file.name });
       void qc.invalidateQueries({ queryKey: keys.attachments(orgID, projectID, task.id) });
     } catch (e) {
-      const storageDisabled = e instanceof ApiError && e.status === 501;
+      const storageDisabled = e instanceof BeaconError && e.status === 501;
       toast({
         tone: storageDisabled ? "warning" : "danger",
         title: storageDisabled ? "Storage is not configured" : "Upload failed",
@@ -120,7 +120,7 @@ export function TaskDetail({
   }
 
   const storageDisabled =
-    attachments.error instanceof ApiError && attachments.error.isNotImplemented;
+    attachments.error instanceof BeaconError && attachments.error.isNotImplemented;
 
   if (!task) return null;
 
