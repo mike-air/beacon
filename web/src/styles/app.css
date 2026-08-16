@@ -1,0 +1,122 @@
+/* Beacon — VOLT design system.
+   Semantic tokens (generated) -> Tailwind utilities. No inline styles in app
+   code; no hex codes outside tokens.source.ts. (production-frontend ch10-12) */
+
+@import "tailwindcss";
+@import "./tokens.gen.css";
+
+/* @theme inline — NOT plain @theme — so the indirection resolves where the
+   class is used and a data-theme flip on any subtree re-resolves. (ch10) */
+@theme inline {
+  --color-sunken: var(--bg-sunken);
+  --color-page: var(--bg-page);
+  --color-raised: var(--bg-raised);
+  --color-overlay: var(--bg-overlay);
+  --color-well: var(--bg-well);
+
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-ink-inverse: var(--ink-inverse);
+
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+
+  --color-accent: var(--accent);
+  --color-on-accent: var(--on-accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-text: var(--accent-text);
+  --color-accent-subtle: var(--accent-subtle);
+
+  --color-volt: var(--volt);
+  --color-on-volt: var(--on-volt);
+  --color-volt-text: var(--volt-text);
+  --color-volt-subtle: var(--volt-subtle);
+
+  --color-success: var(--success);
+  --color-success-text: var(--success-text);
+  --color-success-subtle: var(--success-subtle);
+  --color-warning: var(--warning);
+  --color-warning-text: var(--warning-text);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-danger: var(--danger);
+  --color-danger-text: var(--danger-text);
+  --color-danger-subtle: var(--danger-subtle);
+
+  --color-ring: var(--ring);
+
+  --font-display: "Archivo Black", ui-sans-serif, sans-serif;
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-ctl: 8px;   /* controls: buttons, inputs */
+  --radius-card: 10px; /* cards */
+  --radius-pop: 12px;  /* overlays */
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 1px rgb(0 0 0 / 0.03);
+  --shadow-pop: 0 4px 16px rgb(0 0 0 / 0.10), 0 1px 3px rgb(0 0 0 / 0.06);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@layer base {
+  html { font-family: var(--font-sans); }
+  body {
+    background: var(--bg-page);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--accent-subtle); color: var(--accent-text); }
+
+  /* One focus story for the whole app. */
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Motion is an enhancement, never a requirement. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  /* The live pulse — volt's one job. */
+  @keyframes beacon-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--volt) 50%, transparent); }
+    60% { box-shadow: 0 0 0 6px transparent; }
+  }
+  .animate-beacon { animation: beacon-pulse 2.2s var(--ease-out-soft) infinite; }
+
+  /* The beam: a slow sweep, only while connected. */
+  @keyframes beam-sweep {
+    0%, 100% { transform: rotate(-7deg); }
+    50% { transform: rotate(7deg); }
+  }
+  .animate-beam { animation: beam-sweep 3.4s var(--ease-out-soft) infinite; }
+
+  /* Realtime row wash: applied on SSE update, fades itself out. */
+  @keyframes volt-wash {
+    0% { background-color: var(--volt-subtle); }
+    100% { background-color: transparent; }
+  }
+  .animate-volt-wash { animation: volt-wash 1.6s ease-out 1; }
+
+  /* Overlay entrances: subtle, 140ms, small distance. */
+  @keyframes rise-in {
+    from { opacity: 0; transform: translateY(4px) scale(0.99); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  .animate-rise { animation: rise-in 140ms var(--ease-out-soft); }
+
+  @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+  .animate-fade { animation: fade-in 140ms ease-out; }
+}

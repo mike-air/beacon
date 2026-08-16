@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon — VOLT</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:"Space Grotesk", system-ui, sans-serif; background:#FFFFFF; color:#0A0A0A; padding:48px 20px 120px; line-height:1.55; }
+  .wrap { max-width:1080px; margin:0 auto; }
+  .display { font-family:"Archivo Black", sans-serif; text-transform:uppercase; letter-spacing:-0.01em; }
+  h1 { font-size:56px; line-height:.95; } h1 em { font-style:normal; color:#92278F; }
+  .sub { color:#5C5C66; font-size:15.5px; max-width:72ch; margin-top:14px; }
+  h3 { font-size:12px; text-transform:uppercase; letter-spacing:.12em; color:#5C5C66; margin:34px 0 12px; font-weight:700; }
+  .ramp { display:flex; gap:8px; flex-wrap:wrap; }
+  .sw { width:126px; border:1px solid #E8E8EB; border-radius:8px; overflow:hidden; }
+  .sw .c { height:56px; } .sw .l { padding:7px 9px; font-size:11px; font-weight:500; border-top:1px solid #E8E8EB; }
+  .sw .l code { display:block; color:#5C5C66; font-size:10px; font-family:"JetBrains Mono",monospace; }
+  .maprow { display:grid; grid-template-columns:150px 1fr; gap:4px 18px; font-size:14px; margin:4px 0; align-items:baseline;}
+  .maprow b { font-family:"JetBrains Mono",monospace; font-size:12.5px; }
+  .pill { display:inline-block; width:11px; height:11px; border-radius:3px; margin-right:7px; vertical-align:-1px; }
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:900px){ .pair{grid-template-columns:1fr;} h1{font-size:38px;} }
+
+  .app { background:var(--bg); color:var(--ink); border:1px solid var(--edge); border-radius:12px; overflow:hidden; font-size:14px; }
+  .app .bar { display:flex; align-items:center; gap:10px; padding:11px 14px; background:var(--barbg); border-bottom:1px solid var(--edge); }
+  .app .org { font-size:13px; font-weight:500; padding:4px 11px; border-radius:8px; background:var(--well); color:var(--muted); }
+  .grow{flex:1} .live { display:flex; align-items:center; gap:6px; font-size:12px; color:var(--muted); font-family:"JetBrains Mono",monospace;}
+  .dot { width:8px; height:8px; border-radius:99px; background:var(--volt); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 color-mix(in srgb, var(--volt) 55%, transparent);} 50%{box-shadow:0 0 0 6px transparent;} }
+  .av { width:25px; height:25px; border-radius:99px; background:var(--accent); color:#fff; display:grid; place-items:center; font-size:10px; font-weight:700; }
+  .cols { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; padding:12px; background:var(--wellbg); }
+  .col h5 { font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted); margin:2px 2px 8px; display:flex; gap:6px; align-items:center; }
+  .count { background:var(--well); border-radius:99px; padding:0 7px; font-size:10px; font-family:"JetBrains Mono",monospace; }
+  .card { background:var(--card); border:1px solid var(--edge); border-radius:10px; padding:11px 13px; margin-bottom:8px; transition:border-color 140ms, background-color 140ms; }
+  .card:hover { border-color:var(--line-strong); background:var(--card-hover); }
+  .card .t { font-weight:500; margin-bottom:6px; }
+  .row { display:flex; align-items:center; gap:6px; }
+  .badge { font-size:10.5px; padding:2px 8px; border-radius:6px; font-weight:500; font-family:"JetBrains Mono",monospace; }
+  .b-acc { background:color-mix(in srgb, var(--accent) 14%, transparent); color:var(--accenttext); }
+  .b-ok  { background:color-mix(in srgb, var(--ok) 15%, transparent); color:var(--oktext); }
+  .b-warn{ background:color-mix(in srgb, var(--warn) 16%, transparent); color:var(--warntext); }
+  .b-volt{ background:var(--volt); color:#0A0A0A; }
+  .mini{ width:18px; height:18px; font-size:8px; }
+  .btnrow { display:flex; gap:10px; padding:12px 14px; border-top:1px solid var(--edge); background:var(--barbg); }
+  .btn { font:inherit; font-weight:500; font-size:13px; padding:8px 16px; border-radius:8px; border:1px solid transparent; cursor:pointer; transition:background-color 140ms, border-color 140ms; }
+  .btn.primary { background:var(--accent); color:#fff; }
+  .btn.primary:hover { background:var(--accent-hover); }
+  .btn.primary:active { background:var(--accent-active); }
+  .btn.ghost { background:transparent; color:var(--ink); border-color:var(--edge); }
+  .btn.ghost:hover { background:var(--well); }
+  .themetag { font-size:12px; color:#5C5C66; margin:8px 2px; font-family:"JetBrains Mono",monospace;}
+
+  .light { --bg:#FFFFFF; --barbg:#FFFFFF; --wellbg:#F5F5F3; --card:#FFFFFF; --well:#F0F0EE;
+           --ink:#0A0A0A; --muted:#5C5C66; --edge:#E0E0DC; --frame:#0A0A0A; --hard:#0A0A0A;
+           --accent:#92278F; --accenttext:#7B1F79; --volt:#C6DF00;
+           --ok:#01A79E; --oktext:#067C76; --warn:#FF6A00; --warntext:#B34A00; }
+  .dark  { --bg:#0E0E11; --barbg:#0E0E11; --wellbg:#09090B; --card:#15151A; --well:#202027;
+           --ink:#F1F1F3; --muted:#9C9CA8; --edge:#26262D; --line-strong:#33333B; --card-hover:#1A1A20;
+           --accent:#A62CA3; --accenttext:#E08BDD; --volt:#E3FF00;
+           --ok:#01A79E; --oktext:#2BD9CE; --warn:#FF6A00; --warntext:#FF9A52; }
+
+  .typecard { border:1px solid #E8E8EB; border-radius:12px; padding:24px 26px; }
+  .typecard .d1 { font-family:"Archivo Black"; font-size:30px; text-transform:uppercase; line-height:1; }
+  .typecard .d2 { font-size:15px; margin-top:10px; color:#5C5C66; }
+  .typecard .d3 { font-family:"JetBrains Mono",monospace; font-size:12.5px; margin-top:12px; background:#F0F0EE; color:#5F5F6B; display:inline-block; padding:3px 10px; border-radius:6px; }
+  .note { background:#FAFAF9; border:1px solid #E8E8EB; border-radius:10px; padding:16px 18px; font-size:14px; margin-top:30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="display">Beacon<br><em>volt</em> edition</h1>
+  <p class="sub">Your palette, mapped into a semantic system. The one deliberate move: three of your five colors sit exactly on status hues — so instead of fighting that, <b>they become the status system</b>. Teal = success. Orange = warning. Purple = the brand. And the volt yellow is reserved as the signature — it never means anything except <i>alive</i>.</p>
+
+  <h3>The mapping — your five colors → roles</h3>
+  <div class="maprow"><b><span class="pill" style="background:#92278F"></span>#92278F</b><span><b>accent</b> — buttons, links, selection, focus. Far from every status hue, so it owns "interactive" cleanly.</span></div>
+  <div class="maprow"><b><span class="pill" style="background:#E3FF00"></span>#E3FF00</b><span><b>volt</b> — the signature. Live-presence pulse, realtime highlights, marker emphasis, the logo beam. Never semantic, only energy. (Light theme uses #C6DF00 so it survives on white.)</span></div>
+  <div class="maprow"><b><span class="pill" style="background:#01A79E"></span>#01A79E</b><span><b>success</b> — done states, healthy, confirmations.</span></div>
+  <div class="maprow"><b><span class="pill" style="background:#FF6A00"></span>#FF6A00</b><span><b>warning</b> — rate-limit toasts, unsaved changes, expiring sessions.</span></div>
+  <div class="maprow"><b><span class="pill" style="background:#0A0A0A"></span>#000000</b><span><b>ink &amp; frame</b> — text and the hard 2px borders that give it the poster feel. Surfaces sit at #0C0C0E in dark (pure black smears on OLED); pure black stays for shadows and frames.</span></div>
+  <div class="maprow"><b><span class="pill" style="background:#DC2626"></span>+ #DC2626</b><span><b>danger</b> — the one color your palette was missing. Destructive actions need red; nothing else may use it.</span></div>
+
+  <h3>Type — the cooler font</h3>
+  <div class="typecard">
+    <div class="d1">Archivo Black — display</div>
+    <div class="d2">Space Grotesk for UI and body — geometric, techy, easy at 14px. Exactly the poster's voice, self-hosted via @fontsource so the app makes zero font requests to third parties.</div>
+    <div class="d3">JetBrains Mono → counts, IDs, timestamps, keyboard hints</div>
+  </div>
+
+  <h3>The board — light and dark, same components, tokens only</h3>
+  <div class="pair">
+    <div>
+      <div class="app light">
+        <div class="bar">
+          <svg width="20" height="20" viewBox="0 0 32 32"><path d="M9 16 L28 9 L28 23 Z" fill="#C6DF00"/><rect x="4" y="6" width="6" height="20" rx="2.6" fill="#0A0A0A"/><circle cx="7" cy="16" r="2" fill="#fff"/></svg>
+          <span class="org">acme ▾</span><div class="grow"></div>
+          <span class="live"><span class="dot"></span>3 LIVE</span><div class="av">MA</div>
+        </div>
+        <div class="cols">
+          <div class="col"><h5>Todo <span class="count">4</span></h5>
+            <div class="card"><div class="t">Rotate S3 access keys</div><div class="row"><span class="badge b-warn">ops</span><div class="av mini">EK</div></div></div>
+            <div class="card"><div class="t">Fix flaky webhook test</div><div class="row"><span class="badge b-acc">api</span></div></div></div>
+          <div class="col"><h5>In progress <span class="count">2</span></h5>
+            <div class="card"><div class="t">Ship rate-limit dashboards</div><div class="row"><span class="badge b-volt">now</span><div class="av mini">MA</div></div></div></div>
+          <div class="col"><h5>Done <span class="count">7</span></h5>
+            <div class="card"><div class="t">Meili reindex worker</div><div class="row"><span class="badge b-ok">done</span></div></div></div>
+        </div>
+        <div class="btnrow"><button class="btn primary">New task</button><button class="btn ghost">Filter</button></div>
+      </div><div class="themetag">light — hairline borders, no shadows on cards</div>
+    </div>
+    <div>
+      <div class="app dark">
+        <div class="bar">
+          <svg width="20" height="20" viewBox="0 0 32 32"><path d="M9 16 L28 9 L28 23 Z" fill="#E3FF00" opacity=".9"/><rect x="4" y="6" width="6" height="20" rx="2.6" fill="#E3FF00"/><circle cx="7" cy="16" r="2" fill="#0C0C0E"/></svg>
+          <span class="org">acme ▾</span><div class="grow"></div>
+          <span class="live"><span class="dot"></span>3 LIVE</span><div class="av">MA</div>
+        </div>
+        <div class="cols">
+          <div class="col"><h5>Todo <span class="count">4</span></h5>
+            <div class="card"><div class="t">Rotate S3 access keys</div><div class="row"><span class="badge b-warn">ops</span><div class="av mini">EK</div></div></div>
+            <div class="card"><div class="t">Fix flaky webhook test</div><div class="row"><span class="badge b-acc">api</span></div></div></div>
+          <div class="col"><h5>In progress <span class="count">2</span></h5>
+            <div class="card"><div class="t">Ship rate-limit dashboards</div><div class="row"><span class="badge b-volt">now</span><div class="av mini">MA</div></div></div></div>
+          <div class="col"><h5>Done <span class="count">7</span></h5>
+            <div class="card"><div class="t">Meili reindex worker</div><div class="row"><span class="badge b-ok">done</span></div></div></div>
+        </div>
+        <div class="btnrow"><button class="btn primary">New task</button><button class="btn ghost">Filter</button></div>
+      </div><div class="themetag">dark — volt at full power, purple lifted one step for contrast (same components)</div>
+    </div>
+  </div>
+
+  <div class="note"><b>Two adaptations, honestly flagged:</b> pure #E3FF00 on a white page is invisible (1.06:1 contrast) — light theme carries a deepened <b>#C6DF00</b> and reserves full volt for dark, where it glows. And purple lifts from #92278F to #A62CA3 as dark-theme solid so white labels keep 4.5:1. Everything else is your image, untouched.</div>
+</div>
+</body>
+</html>

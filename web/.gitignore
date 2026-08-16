@@ -1,0 +1,7 @@
+node_modules/
+dist/
+*.gen.css
+*.gen.ts
+!src/api/schema.d.ts
+.env
+.DS_Store

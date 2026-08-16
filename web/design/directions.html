@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Beacon — three design directions</title>
+<style>
+  /* ---------- page chrome (neutral, not one of the directions) ---------- */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background:#101113; color:#E7E9EC; line-height:1.55;
+    padding: 48px 20px 120px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; }
+  h1 { font-size: 34px; letter-spacing:-0.02em; margin-bottom: 6px; }
+  .sub { color:#9AA1AB; font-size:15px; max-width:70ch; }
+  .qgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; margin:26px 0 8px; }
+  .q { background:#17191D; border:1px solid #24272D; border-radius:10px; padding:14px 16px; }
+  .q b { display:block; font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:#8B93A0; margin-bottom:6px; }
+  .q span { font-size:13.5px; }
+  section.dir { margin-top:72px; border-top:1px solid #24272D; padding-top:40px; }
+  .dirhead { display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+  .dirhead h2 { font-size:26px; letter-spacing:-0.01em; }
+  .chip { font-size:11px; padding:3px 10px; border-radius:99px; border:1px solid #3A3F48; color:#B9C0CA; letter-spacing:.05em; }
+  .thesis { margin:10px 0 4px; color:#C6CBD3; font-size:15px; max-width:78ch; }
+  .memo { color:#8B93A0; font-size:13.5px; margin-bottom:22px; }
+  .memo b { color:#C6CBD3; }
+  h3 { font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:#8B93A0; margin:26px 0 10px; }
+
+  /* swatches */
+  .ramp { display:flex; gap:6px; flex-wrap:wrap; }
+  .sw { width:118px; border-radius:8px; overflow:hidden; border:1px solid #2A2E35; }
+  .sw .c { height:52px; }
+  .sw .l { background:#17191D; padding:6px 9px; font-size:10.5px; color:#AEB5BF; }
+  .sw .l code { display:block; color:#6E7681; font-size:10px; font-family:ui-monospace,monospace; }
+
+  /* mini app mockups — token-driven, one component set, three skins */
+  .pair { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media (max-width:900px){ .pair { grid-template-columns:1fr; } }
+  .app {
+    background:var(--bg); color:var(--ink); border:1px solid var(--edge);
+    border-radius:var(--r-lg); overflow:hidden; font-size:var(--fs);
+    font-family:var(--font); box-shadow: 0 1px 0 rgba(0,0,0,.2);
+  }
+  .app .bar { display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--barbg); border-bottom:1px solid var(--edge); }
+  .app .bar .org { font-size:calc(var(--fs) - 1px); padding:4px 10px; border-radius:var(--r-sm); background:var(--well); color:var(--muted); }
+  .app .bar .grow { flex:1; }
+  .app .bar .live { display:flex; align-items:center; gap:6px; font-size:calc(var(--fs) - 2px); color:var(--muted); }
+  .dot { width:7px; height:7px; border-radius:99px; background:var(--ok); animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1; box-shadow:0 0 0 0 color-mix(in srgb, var(--ok) 45%, transparent);} 50%{opacity:.75; box-shadow:0 0 0 5px transparent;} }
+  .app .av { width:24px; height:24px; border-radius:99px; background:var(--accent); color:var(--onaccent); display:grid; place-items:center; font-size:10px; font-weight:700; }
+  .cols { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; padding:12px; background:var(--wellbg); }
+  .col h5 { font-size:calc(var(--fs) - 2px); text-transform:uppercase; letter-spacing:.07em; color:var(--muted); margin:2px 2px 8px; font-weight:600; display:flex; gap:6px; align-items:center;}
+  .count { background:var(--well); border-radius:99px; padding:0 7px; font-size:10px; }
+  .card { background:var(--card); border:1px solid var(--edge); border-radius:var(--r-md); padding:var(--pad); margin-bottom:8px; box-shadow:var(--shadow); transition:transform var(--speed), box-shadow var(--speed); }
+  .card:hover { transform:translateY(-1px); }
+  .card .t { font-weight:600; margin-bottom:5px; letter-spacing:var(--track); }
+  .row { display:flex; align-items:center; gap:6px; }
+  .badge { font-size:10px; padding:2px 8px; border-radius:99px; font-weight:600; }
+  .b-acc { background:color-mix(in srgb, var(--accent) 16%, transparent); color:var(--accenttext); }
+  .b-ok  { background:color-mix(in srgb, var(--ok) 16%, transparent);  color:var(--ok); }
+  .b-warn{ background:color-mix(in srgb, var(--warn) 20%, transparent);color:var(--warntext); }
+  .mini { width:18px; height:18px; font-size:8px; }
+  .btnrow { display:flex; gap:8px; padding:12px 14px; border-top:1px solid var(--edge); background:var(--barbg); }
+  .btn { font:inherit; font-weight:600; font-size:calc(var(--fs) - 1px); padding:7px 14px; border-radius:var(--r-sm); border:1px solid transparent; cursor:pointer; transition:all var(--speed); }
+  .btn.primary { background:var(--accent); color:var(--onaccent); }
+  .btn.primary:hover { background:var(--accenthover); }
+  .btn.ghost { background:transparent; color:var(--ink); border-color:var(--edge); }
+  .btn.ghost:hover { background:var(--well); }
+  .themetag { font-size:11px; color:#6E7681; margin:6px 2px; }
+
+  /* type sample */
+  .type { background:var(--bg); color:var(--ink); border:1px solid var(--edge); border-radius:12px; padding:20px 24px; font-family:var(--font); }
+  .type .h { font-size:22px; font-weight:700; letter-spacing:var(--track); font-family:var(--fontdisplay, var(--font)); }
+  .type .b { color:var(--muted); font-size:var(--fs); margin-top:4px; }
+  .type .m { font-family:ui-monospace, "SF Mono", monospace; font-size:calc(var(--fs) - 2px); margin-top:10px; color:var(--accenttext); }
+
+  pre.prompt { background:#0C0D0F; border:1px solid #24272D; border-radius:10px; padding:14px 16px; font-size:12.5px; color:#B9C0CA; white-space:pre-wrap; font-family:ui-monospace,monospace; }
+
+  table { border-collapse:collapse; width:100%; margin-top:14px; font-size:13.5px; }
+  th, td { text-align:left; padding:9px 12px; border-bottom:1px solid #24272D; }
+  th { color:#8B93A0; font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+  td:first-child { color:#8B93A0; }
+  .rec { background:#17191D; border:1px solid #2E5A48; border-radius:12px; padding:18px 22px; margin-top:40px; }
+  .rec b { color:#5BD6A2; }
+
+  /* ================= DIRECTION TOKENS ================= */
+  /* D1 — TERMINAL */
+  .d1 { --font:ui-sans-serif,system-ui,sans-serif; --fs:13px; --r-lg:8px; --r-md:5px; --r-sm:5px;
+        --pad:9px 11px; --speed:80ms; --track:0;
+        --ok:#3DD68C; --warn:#F5A524; --warntext:#B47B12; }
+  .d1.dark { --bg:#10141A; --barbg:#0C0F14; --wellbg:#0C0F14; --card:#161B23; --well:#1D2430;
+        --edge:#232B36; --ink:#E8EDF2; --muted:#8B97A5;
+        --accent:#0FA3BF; --accenthover:#12B4D2; --onaccent:#04181D; --accenttext:#4CD1E8;
+        --shadow:none; --warntext:#F5C55F; }
+  .d1.light { --bg:#F5F7F9; --barbg:#FFFFFF; --wellbg:#EDF0F3; --card:#FFFFFF; --well:#E7EBEF;
+        --edge:#D9DEE4; --ink:#17202A; --muted:#5A6572;
+        --accent:#0E90A9; --accenthover:#0C7F96; --onaccent:#FFFFFF; --accenttext:#0A7488;
+        --shadow:0 1px 2px rgba(23,32,42,.06); }
+  /* D2 — ATELIER */
+  .d2 { --font:Charter,Georgia,ui-serif,serif; --fontdisplay:Charter,Georgia,serif; --fs:15px;
+        --r-lg:14px; --r-md:10px; --r-sm:9px; --pad:13px 15px; --speed:200ms; --track:-0.01em;
+        --ok:#2F9E6E; --warn:#C98A1B; --warntext:#8F6212; }
+  .d2.light { --bg:#FAF7F0; --barbg:#FFFDF8; --wellbg:#F3EFE6; --card:#FFFFFF; --well:#EFE9DC;
+        --edge:#E3DCCC; --ink:#26221B; --muted:#6E675C;
+        --accent:#5850C7; --accenthover:#4A43B2; --onaccent:#FFFFFF; --accenttext:#4A43B2;
+        --shadow:0 1px 3px rgba(38,34,27,.07); }
+  .d2.dark { --bg:#17140E; --barbg:#131009; --wellbg:#131009; --card:#1E1A12; --well:#282216;
+        --edge:#302A1D; --ink:#EDE7DB; --muted:#9A9284;
+        --accent:#5850C7; --accenthover:#6A62D6; --onaccent:#FFFFFF; --accenttext:#A8A2EC;
+        --shadow:none; --warntext:#E2B45C; }
+  /* D3 — PULSE */
+  .d3 { --font:ui-sans-serif,system-ui,sans-serif; --fs:14px; --r-lg:16px; --r-md:12px; --r-sm:10px;
+        --pad:12px 14px; --speed:160ms; --track:-0.015em;
+        --ok:#22B573; --warn:#F59E0B; --warntext:#A16207; }
+  .d3.light { --bg:#FBFBFD; --barbg:#FFFFFF; --wellbg:#F3F3F8; --card:#FFFFFF; --well:#EEEDF5;
+        --edge:#E4E2EE; --ink:#191825; --muted:#6F6D7E;
+        --accent:#7C3AED; --accenthover:#6D28D9; --onaccent:#FFFFFF; --accenttext:#6D28D9;
+        --shadow:0 2px 6px rgba(25,24,37,.07); }
+  .d3.dark { --bg:#121019; --barbg:#0C0A12; --wellbg:#0C0A12; --card:#191624; --well:#211D30;
+        --edge:#292538; --ink:#EDEBF6; --muted:#918DA3;
+        --accent:#8B5CF6; --accenthover:#9D74F8; --onaccent:#1B1040; --accenttext:#B49AFA;
+        --shadow:none; --warntext:#FBBF24; }
+
+  /* logos */
+  .logos { display:flex; gap:14px; align-items:center; flex-wrap:wrap; }
+  .logotile { display:flex; align-items:center; gap:10px; background:var(--bg); color:var(--ink);
+              border:1px solid var(--edge); border-radius:12px; padding:14px 18px; font-family:var(--font); font-weight:700; }
+  .beam { animation: sweep 3.2s ease-in-out infinite; transform-origin: 7px 16px; }
+  @keyframes sweep { 0%,100%{ transform:rotate(-8deg); opacity:.85;} 50%{ transform:rotate(8deg); opacity:1;} }
+  @media (prefers-reduced-motion: reduce){ .beam, .dot { animation:none; } .card{ transition:none;} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Beacon — three design directions</h1>
+  <p class="sub">Method is <code>production-frontend</code> ch06: five questions, answered before any color exists. Everything below is one component set re-skinned by tokens only — which is exactly how the real app will work. No inline styles anywhere in the product code.</p>
+
+  <div class="qgrid">
+    <div class="q"><b>One job of the main screen</b><span>“What is my team doing right now, and what do I move next?”</span></div>
+    <div class="q"><b>Who, under what conditions</b><span>A team member, many times a day, 10–90&nbsp;second sessions, desktop-first.</span></div>
+    <div class="q"><b>Density or air</b><span>The open question — the three directions answer it differently.</span></div>
+    <div class="q"><b>How serious</b><span>Work tool, not a bank. Personality allowed; ceremony not.</span></div>
+    <div class="q"><b>One memorable thing</b><span>Each direction proposes its own — the live beam, the paper, the pulse.</span></div>
+  </div>
+
+  <!-- ============================ D1 ============================ -->
+  <section class="dir">
+    <div class="dirhead">
+      <h2>1 · Terminal</h2>
+      <span class="chip">dark-first</span><span class="chip">dense · 13px · 5px radius · 80ms</span>
+    </div>
+    <p class="thesis">An operations console. The board reads like a well-kept terminal: cool charcoal, cyan signal, everything within one glance. For people who open it forty times a day and want zero ceremony.</p>
+    <p class="memo"><b>The memorable thing:</b> the live wire — SSE presence rendered as a pulsing cyan beacon in the top bar; when a teammate moves a task, you see it breathe.</p>
+
+    <h3>Logo</h3>
+    <div class="logos">
+      <div class="logotile d1 dark">
+        <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+          <g class="beam"><path d="M9 16 L28 9 L28 23 Z" fill="#0FA3BF" opacity=".28"/><path d="M9 16 L24 11.5 L24 20.5 Z" fill="#0FA3BF" opacity=".55"/></g>
+          <rect x="4" y="6" width="6" height="20" rx="2.6" fill="#4CD1E8"/><circle cx="7" cy="16" r="2.2" fill="#E8FBFF"/>
+        </svg>
+        beacon
+      </div>
+      <div class="logotile d1 light">
+        <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+          <g class="beam"><path d="M9 16 L28 9 L28 23 Z" fill="#0E90A9" opacity=".22"/><path d="M9 16 L24 11.5 L24 20.5 Z" fill="#0E90A9" opacity=".5"/></g>
+          <rect x="4" y="6" width="6" height="20" rx="2.6" fill="#0E90A9"/><circle cx="7" cy="16" r="2.2" fill="#FFFFFF"/>
+        </svg>
+        beacon
+      </div>
+    </div>
+
+    <h3>Palette — dark (primary theme)</h3>
+    <div class="ramp">
+      <div class="sw"><div class="c" style="background:#0C0F14"></div><div class="l">surface-sunken<code>#0C0F14</code></div></div>
+      <div class="sw"><div class="c" style="background:#10141A"></div><div class="l">surface-page<code>#10141A</code></div></div>
+      <div class="sw"><div class="c" style="background:#161B23"></div><div class="l">surface-raised<code>#161B23</code></div></div>
+      <div class="sw"><div class="c" style="background:#1D2430"></div><div class="l">surface-overlay<code>#1D2430</code></div></div>
+      <div class="sw"><div class="c" style="background:#E8EDF2"></div><div class="l">text-primary<code>#E8EDF2</code></div></div>
+      <div class="sw"><div class="c" style="background:#8B97A5"></div><div class="l">text-muted<code>#8B97A5</code></div></div>
+      <div class="sw"><div class="c" style="background:#0FA3BF"></div><div class="l">accent-solid<code>#0FA3BF</code></div></div>
+      <div class="sw"><div class="c" style="background:#4CD1E8"></div><div class="l">accent-text<code>#4CD1E8</code></div></div>
+    </div>
+    <h3>Status (shared logic, all directions: hues far from accent)</h3>
+    <div class="ramp">
+      <div class="sw"><div class="c" style="background:#E5484D"></div><div class="l">danger<code>#E5484D</code></div></div>
+      <div class="sw"><div class="c" style="background:#F5A524"></div><div class="l">warning<code>#F5A524</code></div></div>
+      <div class="sw"><div class="c" style="background:#3DD68C"></div><div class="l">success<code>#3DD68C</code></div></div>
+    </div>
+
+    <h3>The board, both themes</h3>
+    <div class="pair">
+      <div>
+        <div class="app d1 dark">
+          <div class="bar">
+            <svg width="18" height="18" viewBox="0 0 32 32"><path d="M9 16 L26 10 L26 22 Z" fill="#0FA3BF" opacity=".5"/><rect x="4" y="6" width="6" height="20" rx="2.6" fill="#4CD1E8"/></svg>
+            <span class="org">acme-industries ▾</span><div class="grow"></div>
+            <span class="live"><span class="dot"></span> 3 online</span><div class="av">MA</div>
+          </div>
+          <div class="cols">
+            <div class="col"><h5>Todo <span class="count">4</span></h5>
+              <div class="card"><div class="t">Rotate S3 access keys</div><div class="row"><span class="badge b-warn">ops</span><div class="av mini">EK</div></div></div>
+              <div class="card"><div class="t">Fix flaky webhook test</div><div class="row"><span class="badge b-acc">api</span></div></div></div>
+            <div class="col"><h5>In progress <span class="count">2</span></h5>
+              <div class="card"><div class="t">Ship rate-limit dashboards</div><div class="row"><span class="badge b-acc">api</span><div class="av mini">MA</div></div></div></div>
+            <div class="col"><h5>Done <span class="count">7</span></h5>
+              <div class="card"><div class="t">Meili reindex worker</div><div class="row"><span class="badge b-ok">done</span></div></div></div>
+          </div>
+          <div class="btnrow"><button class="btn primary">New task</button><button class="btn ghost">Filter</button></div>
+        </div><div class="themetag">dark — the default</div>
+      </div>
+      <div>
+        <div class="app d1 light">
+          <div class="bar">
+            <svg width="18" height="18" viewBox="0 0 32 32"><path d="M9 16 L26 10 L26 22 Z" fill="#0E90A9" opacity=".45"/><rect x="4" y="6" width="6" height="20" rx="2.6" fill="#0E90A9"/></svg>
+            <span class="org">acme-industries ▾</span><div class="grow"></div>
+            <span class="live"><span class="dot"></span> 3 online</span><div class="av">MA</div>
+          </div>
+          <div class="cols">
+            <div class="col"><h5>Todo <span class="count">4</span></h5>
+              <div class="card"><div class="t">Rotate S3 access keys</div><div class="row"><span class="badge b-warn">ops</span><div class="av mini">EK</div></div></div>
+              <div class="card"><div class="t">Fix flaky webhook test</div><div class="row"><span class="badge b-acc">api</span></div></div></div>
+            <div class="col"><h5>In progress <span class="count">2</span></h5>
+              <div class="card"><div class="t">Ship rate-limit dashboards</div><div class="row"><span class="badge b-acc">api</span><div class="av mini">MA</div></div></div></div>
+            <div class="col"><h5>Done <span class="count">7</span></h5>
+              <div class="card"><div class="t">Meili reindex worker</div><div class="row"><span class="badge b-ok">done</span></div></div></div>
+          </div>
+          <div class="btnrow"><button class="btn primary">New task</button><button class="btn ghost">Filter</button></div>
+        </div><div class="themetag">light</div>
+      </div>
+    </div>
+
+    <h3>Type &amp; motion</h3>
+    <div class="pair">
+      <div class="type d1 dark"><div class="h">Inter / system — tabular numerals for counts</div><div class="b">13px body, 1.5 line height. Motion: 80ms ease-out, movement ≤ 2px. Nothing bounces.</div><div class="m">SSE reconnected · 42ms</div></div>
+      <div>
+        <pre class="prompt">AI image prompt (auth page, optional):
+"Minimal dark control-room scene, a single cyan lighthouse beam sweeping across a deep charcoal sea of small glowing task cards, isometric, high contrast, no text, no people, subtle film grain, palette #10141A #0FA3BF #4CD1E8 #E8EDF2"</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ D2 ============================ -->
+  <section class="dir">
+    <div class="dirhead">
+      <h2>2 · Atelier</h2>
+      <span class="chip">light-first</span><span class="chip">airy · 15px serif · 10px radius · 200ms</span>
+    </div>
+    <p class="thesis">A craftsman's workbench on warm paper. Ink text, cream surfaces, one deep indigo accent. Feels like the Stencil books — calm, literate, deliberate. For a team that thinks of tasks as work worth doing well, not tickets.</p>
+    <p class="memo"><b>The memorable thing:</b> the paper — a warm off-white nobody else ships, serif headings, and completed tasks that get an ink "stamp" animation like a ledger entry being settled.</p>
+
+    <h3>Logo</h3>
+    <div class="logos">
+      <div class="logotile d2 light">
+        <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+          <g class="beam"><path d="M9 16 L28 9 L28 23 Z" fill="#5850C7" opacity=".18"/><path d="M9 16 L24 11.5 L24 20.5 Z" fill="#5850C7" opacity=".4"/></g>
+          <rect x="4" y="6" width="6" height="20" rx="2.6" fill="#26221B"/><circle cx="7" cy="16" r="2.2" fill="#FAF7F0"/>
+        </svg>
+        Beacon
+      </div>
+      <div class="logotile d2 dark">
+        <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+          <g class="beam"><path d="M9 16 L28 9 L28 23 Z" fill="#A8A2EC" opacity=".2"/><path d="M9 16 L24 11.5 L24 20.5 Z" fill="#A8A2EC" opacity=".45"/></g>
+          <rect x="4" y="6" width="6" height="20" rx="2.6" fill="#EDE7DB"/><circle cx="7" cy="16" r="2.2" fill="#17140E"/>
+        </svg>
+        Beacon
+      </div>
+    </div>
+
+    <h3>Palette — light (primary theme)</h3>
+    <div class="ramp">
+      <div class="sw"><div class="c" style="background:#F3EFE6"></div><div class="l">surface-sunken<code>#F3EFE6</code></div></div>
+      <div class="sw"><div class="c" style="background:#FAF7F0"></div><div class="l">surface-page<code>#FAF7F0</code></div></div>
+      <div class="sw"><div class="c" style="background:#FFFFFF"></div><div class="l">surface-raised<code>#FFFFFF</code></div></div>
+      <div class="sw"><div class="c" style="background:#26221B"></div><div class="l">text-primary<code>#26221B</code></div></div>
+      <div class="sw"><div class="c" style="background:#6E675C"></div><div class="l">text-muted<code>#6E675C</code></div></div>
+      <div class="sw"><div class="c" style="background:#E3DCCC"></div><div class="l">border-default<code>#E3DCCC</code></div></div>
+      <div class="sw"><div class="c" style="background:#5850C7"></div><div class="l">accent-solid<code>#5850C7</code></div></div>
+      <div class="sw"><div class="c" style="background:#282216"></div><div class="l">dark: surface<code>#282216</code></div></div>
+    </div>
+
+    <h3>The board, both themes</h3>
+    <div class="pair">
+      <div>
+        <div class="app d2 light">
+          <div class="bar">
+            <svg width="18" height="18" viewBox="0 0 32 32"><path d="M9 16 L26 10 L26 22 Z" fill="#5850C7" opacity=".35"/><rect x="4" y="6" width="6" height="20" rx="2.6" fill="#26221B"/></svg>
+            <span class="org">Acme Industries ▾</span><div class="grow"></div>
+            <span class="live"><span class="dot"></span> 3 online</span><div class="av">MA</div>
+          </div>
+          <div class="cols">
+            <div class="col"><h5>Todo <span class="count">4</span></h5>
+              <div class="card"><div class="t">Rotate S3 access keys</div><div class="row"><span class="badge b-warn">ops</span><div class="av mini">EK</div></div></div>
+              <div class="card"><div class="t">Fix flaky webhook test</div><div class="row"><span class="badge b-acc">api</span></div></div></div>
+            <div class="col"><h5>In progress <span class="count">2</span></h5>
+              <div class="card"><div class="t">Ship rate-limit dashboards</div><div class="row"><span class="badge b-acc">api</span><div class="av mini">MA</div></div></div></div>
+            <div class="col"><h5>Done <span class="count">7</span></h5>
+              <div class="card"><div class="t">Meili reindex worker</div><div class="row"><span class="badge b-ok">done</span></div></div></div>
+          </div>
+          <div class="btnrow"><button class="btn primary">New task</button><button class="btn ghost">Filter</button></div>
+        </div><div class="themetag">light — the default</div>
+      </div>
+      <div>
+        <div class="app d2 dark">
+          <div class="bar">
+            <svg width="18" height="18" viewBox="0 0 32 32"><path d="M9 16 L26 10 L26 22 Z" fill="#A8A2EC" opacity=".4"/><rect x="4" y="6" width="6" height="20" rx="2.6" fill="#EDE7DB"/></svg>
+            <span class="org">Acme Industries ▾</span><div class="grow"></div>
+            <span class="live"><span class="dot"></span> 3 online</span><div class="av">MA</div>
+          </div>
+          <div class="cols">
+            <div class="col"><h5>Todo <span class="count">4</span></h5>
+              <div class="card"><div class="t">Rotate S3 access keys</div><div class="row"><span class="badge b-warn">ops</span><div class="av mini">EK</div></div></div>
+              <div class="card"><div class="t">Fix flaky webhook test</div><div class="row"><span class="badge b-acc">api</span></div></div></div>
+            <div class="col"><h5>In progress <span class="count">2</span></h5>
+              <div class="card"><div class="t">Ship rate-limit dashboards</div><div class="row"><span class="badge b-acc">api</span><div class="av mini">MA</div></div></div></div>
+            <div class="col"><h5>Done <span class="count">7</span></h5>
+              <div class="card"><div class="t">Meili reindex worker</div><div class="row"><span class="badge b-ok">done</span></div></div></div>
+          </div>
+          <div class="btnrow"><button class="btn primary">New task</button><button class="btn ghost">Filter</button></div>
+        </div><div class="themetag">dark — warm, not grey</div>
+      </div>
+    </div>
+
+    <h3>Type &amp; motion</h3>
+    <div class="pair">
+      <div class="type d2 light"><div class="h">Charter / Georgia headings, system body</div><div class="b">15–16px body, generous 1.6 line height. Motion: 200ms ease, settle not snap. The stamp on completion is the one flourish.</div><div class="m">entry settled · ledger №42</div></div>
+      <div>
+        <pre class="prompt">AI image prompt (auth page, optional):
+"A warm cream desk from above, a small brass lighthouse paperweight casting soft indigo shadow across handwritten index cards, morning light, editorial photography, muted, no text, palette #FAF7F0 #26221B #5850C7"</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ D3 ============================ -->
+  <section class="dir">
+    <div class="dirhead">
+      <h2>3 · Pulse</h2>
+      <span class="chip">both themes equal</span><span class="chip">friendly · 14px · 12px radius · 160ms spring</span>
+    </div>
+    <p class="thesis">Modern product energy — Linear's discipline with its own voice. Cool neutrals, one vivid violet, confident type, motion that feels alive but never slow. The direction most likely to make someone say "what app is that?"</p>
+    <p class="memo"><b>The memorable thing:</b> the pulse — the beacon logomark sends a ring on every realtime event, and moving a task emits a tiny violet ripple at the drop point.</p>
+
+    <h3>Logo</h3>
+    <div class="logos">
+      <div class="logotile d3 light">
+        <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+          <g class="beam"><path d="M9 16 L28 9 L28 23 Z" fill="#7C3AED" opacity=".2"/><path d="M9 16 L24 11.5 L24 20.5 Z" fill="#C026D3" opacity=".35"/></g>
+          <rect x="4" y="6" width="6" height="20" rx="3" fill="#7C3AED"/><circle cx="7" cy="16" r="2.2" fill="#FFFFFF"/>
+        </svg>
+        beacon
+      </div>
+      <div class="logotile d3 dark">
+        <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+          <g class="beam"><path d="M9 16 L28 9 L28 23 Z" fill="#8B5CF6" opacity=".3"/><path d="M9 16 L24 11.5 L24 20.5 Z" fill="#D946EF" opacity=".4"/></g>
+          <rect x="4" y="6" width="6" height="20" rx="3" fill="#B49AFA"/><circle cx="7" cy="16" r="2.2" fill="#121019"/>
+        </svg>
+        beacon
+      </div>
+    </div>
+
+    <h3>Palette — both themes carry equal weight</h3>
+    <div class="ramp">
+      <div class="sw"><div class="c" style="background:#FBFBFD"></div><div class="l">light: page<code>#FBFBFD</code></div></div>
+      <div class="sw"><div class="c" style="background:#FFFFFF"></div><div class="l">light: raised<code>#FFFFFF</code></div></div>
+      <div class="sw"><div class="c" style="background:#191825"></div><div class="l">light: text<code>#191825</code></div></div>
+      <div class="sw"><div class="c" style="background:#7C3AED"></div><div class="l">accent-solid<code>#7C3AED</code></div></div>
+      <div class="sw"><div class="c" style="background:#121019"></div><div class="l">dark: page<code>#121019</code></div></div>
+      <div class="sw"><div class="c" style="background:#191624"></div><div class="l">dark: raised<code>#191624</code></div></div>
+      <div class="sw"><div class="c" style="background:#8B5CF6"></div><div class="l">dark: accent<code>#8B5CF6</code></div></div>
+      <div class="sw"><div class="c" style="background:#B49AFA"></div><div class="l">dark: accent-text<code>#B49AFA</code></div></div>
+    </div>
+
+    <h3>The board, both themes</h3>
+    <div class="pair">
+      <div>
+        <div class="app d3 light">
+          <div class="bar">
+            <svg width="18" height="18" viewBox="0 0 32 32"><path d="M9 16 L26 10 L26 22 Z" fill="#7C3AED" opacity=".35"/><rect x="4" y="6" width="6" height="20" rx="3" fill="#7C3AED"/></svg>
+            <span class="org">Acme ▾</span><div class="grow"></div>
+            <span class="live"><span class="dot"></span> 3 online</span><div class="av">MA</div>
+          </div>
+          <div class="cols">
+            <div class="col"><h5>Todo <span class="count">4</span></h5>
+              <div class="card"><div class="t">Rotate S3 access keys</div><div class="row"><span class="badge b-warn">ops</span><div class="av mini">EK</div></div></div>
+              <div class="card"><div class="t">Fix flaky webhook test</div><div class="row"><span class="badge b-acc">api</span></div></div></div>
+            <div class="col"><h5>In progress <span class="count">2</span></h5>
+              <div class="card"><div class="t">Ship rate-limit dashboards</div><div class="row"><span class="badge b-acc">api</span><div class="av mini">MA</div></div></div></div>
+            <div class="col"><h5>Done <span class="count">7</span></h5>
+              <div class="card"><div class="t">Meili reindex worker</div><div class="row"><span class="badge b-ok">done</span></div></div></div>
+          </div>
+          <div class="btnrow"><button class="btn primary">New task</button><button class="btn ghost">Filter</button></div>
+        </div><div class="themetag">light</div>
+      </div>
+      <div>
+        <div class="app d3 dark">
+          <div class="bar">
+            <svg width="18" height="18" viewBox="0 0 32 32"><path d="M9 16 L26 10 L26 22 Z" fill="#8B5CF6" opacity=".45"/><rect x="4" y="6" width="6" height="20" rx="3" fill="#B49AFA"/></svg>
+            <span class="org">Acme ▾</span><div class="grow"></div>
+            <span class="live"><span class="dot"></span> 3 online</span><div class="av">MA</div>
+          </div>
+          <div class="cols">
+            <div class="col"><h5>Todo <span class="count">4</span></h5>
+              <div class="card"><div class="t">Rotate S3 access keys</div><div class="row"><span class="badge b-warn">ops</span><div class="av mini">EK</div></div></div>
+              <div class="card"><div class="t">Fix flaky webhook test</div><div class="row"><span class="badge b-acc">api</span></div></div></div>
+            <div class="col"><h5>In progress <span class="count">2</span></h5>
+              <div class="card"><div class="t">Ship rate-limit dashboards</div><div class="row"><span class="badge b-acc">api</span><div class="av mini">MA</div></div></div></div>
+            <div class="col"><h5>Done <span class="count">7</span></h5>
+              <div class="card"><div class="t">Meili reindex worker</div><div class="row"><span class="badge b-ok">done</span></div></div></div>
+          </div>
+          <div class="btnrow"><button class="btn primary">New task</button><button class="btn ghost">Filter</button></div>
+        </div><div class="themetag">dark</div>
+      </div>
+    </div>
+
+    <h3>Type &amp; motion</h3>
+    <div class="pair">
+      <div class="type d3 light"><div class="h">Inter tight — bold display, -1.5% tracking</div><div class="b">14px body. Motion: 160ms with a soft spring on entrance; ripples on realtime events; all of it gone under prefers-reduced-motion.</div><div class="m">task moved → In progress ✦</div></div>
+      <div>
+        <pre class="prompt">AI image prompt (auth page, optional):
+"Abstract night scene: a minimal geometric lighthouse emitting concentric violet pulse rings over a calm dark gradient, soft glow, generous negative space, product-marketing style, no text, palette #121019 #7C3AED #D946EF #EDEBF6"</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================ COMPARE ============================ -->
+  <section class="dir">
+    <h2 style="font-size:24px">Side by side</h2>
+    <table>
+      <tr><th></th><th>1 · Terminal</th><th>2 · Atelier</th><th>3 · Pulse</th></tr>
+      <tr><td>Default theme</td><td>Dark</td><td>Light (warm)</td><td>Both equal</td></tr>
+      <tr><td>Accent</td><td>Cyan #0FA3BF</td><td>Indigo #5850C7</td><td>Violet #7C3AED</td></tr>
+      <tr><td>Density</td><td>High — 13px, 32px rows</td><td>Airy — 15px, 56px rows</td><td>Middle — 14px, 44px rows</td></tr>
+      <tr><td>Radius / motion</td><td>5px · 80ms</td><td>10px · 200ms</td><td>12px · 160ms spring</td></tr>
+      <tr><td>Personality risk</td><td>Can feel cold</td><td>Can feel slow</td><td>Can feel derivative of Linear</td></tr>
+      <tr><td>Portfolio story</td><td>“I build serious tools”</td><td>“I have taste nobody else has”</td><td>“I can ship a modern product”</td></tr>
+      <tr><td>Illustration style</td><td>Blueprint line-art, cyan on charcoal</td><td>Ink + one indigo wash, engraving feel</td><td>Duotone geometric, violet/fuchsia</td></tr>
+    </table>
+
+    <div class="rec">
+      <b>My recommendation: Pulse (3), stolen sharpness from Terminal.</b><br>
+      <span style="color:#B9C0CA; font-size:14px">Take direction 3's palette, logo and motion, but pull the density one notch toward Terminal (14px body, 40px rows, 10px radius). Reasons: the violet is far from all three status hues so the semantics stay clean in both themes; it demos best in a portfolio; and the pulse gimmick is powered by the SSE endpoint your backend actually has — the memorable thing is real, not decoration. Atelier is the most distinctive but its warmth fights the "glanceable console" job of a task board. Say the word — or mix any levers you like: any accent can be swapped onto any density in one token file, which is rather the point.</span>
+    </div>
+  </section>
+</div>
+</body>
+</html>
