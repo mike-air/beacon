@@ -224,9 +224,29 @@ func (s *Server) Routes() http.Handler {
 	r.Use(metricsMiddleware)    // Ch 35
 	r.Use(middleware.Recoverer) // turn a panic into a 500 instead of a dead server
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   s.cfg.CORSOrigins,
-		AllowedMethods:   []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type"},
+		AllowedOrigins: s.cfg.CORSOrigins,
+		AllowedMethods: []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+		// Every header a browser client actually sends. Idempotency-Key and
+		// If-None-Match were missing, which made two shipped features
+		// unreachable from a browser: the preflight for a request carrying
+		// either one returns 200 with no Access-Control-Allow-Origin, and the
+		// browser reports it as a generic CORS block — so the failure looks
+		// like a broken client rather than a header that was never allowed.
+		AllowedHeaders: []string{
+			"Authorization",
+			"Content-Type",
+			"Idempotency-Key", // Ch 14 — at-most-once writes
+			"If-None-Match",   // Ch 28 — conditional GETs
+		},
+		// A cross-origin script can only read the CORS-safelisted response
+		// headers unless they are named here. Without this, the client cannot
+		// see the ETag it is meant to send back, cannot honour Retry-After on
+		// a 429, and cannot quote a request id in a bug report.
+		ExposedHeaders: []string{
+			"ETag",
+			"Retry-After",
+			"X-Request-Id",
+		},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}))

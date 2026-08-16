@@ -47,7 +47,29 @@ func (s *Server) handleListOrgs(w http.ResponseWriter, r *http.Request) {
 		s.handleError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": list})
+
+	// This was the one list endpoint in the API that answered a bare
+	// {"items": [...]} instead of listResponse. Every client then needs a
+	// special case for exactly one URL, and the ones that do not have it fail
+	// on a shape they had no reason to expect. One envelope, everywhere.
+	//
+	// The slice is paged here rather than in SQL because ListForUser returns
+	// every org a single user belongs to — a handful of rows, already loaded.
+	// Paging it in the handler keeps the response shape honest without a
+	// query change that would buy nothing.
+	limit, offset := parsePaging(r)
+	if offset > len(list) {
+		offset = len(list)
+	}
+	end := offset + limit
+	if end > len(list) {
+		end = len(list)
+	}
+	writeJSON(w, http.StatusOK, listResponse{
+		Items:  list[offset:end],
+		Limit:  limit,
+		Offset: offset,
+	})
 }
 
 // handleAddMember adds a member to an org. POST /v1/orgs/{orgID}/members.
