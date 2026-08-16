@@ -272,11 +272,8 @@ func (s *Server) Routes() http.Handler {
 
 		// Public auth endpoints. Keyed by IP and deliberately tight (Ch 19):
 		// nobody legitimately fires hundreds of logins a minute from one address.
-		r.Group(func(r chi.Router) {
-			r.Use(ipRateLimit(s.cfg.AuthRateLimitRPS, s.cfg.AuthRateLimitBurst))
-			r.Post("/auth/signup", s.handleSignup)
-			r.Post("/auth/login", s.handleLogin)
-		})
+		// signup and login are registered through huma (ops_auth.go), with
+		// the IP limiter as their gate rather than as chi middleware.
 
 		// Authenticated endpoints.
 		r.Group(func(r chi.Router) {
@@ -293,9 +290,6 @@ func (s *Server) Routes() http.Handler {
 			// absent here. Conversion is route by route on purpose: the two
 			// paths coexist on the same router, so each one can be moved and
 			// verified without a flag day.
-			r.Get("/me/preferences", s.handleGetPrefs)
-			r.Patch("/me/preferences", s.handleSetPrefs)
-
 			r.Post("/orgs", s.handleCreateOrg)
 			r.Get("/orgs", s.handleListOrgs)
 
@@ -367,11 +361,10 @@ func (s *Server) Routes() http.Handler {
 	api := newHumaAPI(r)
 	s.api = api
 
-	authed := huma.Middlewares{
-		s.humaRequireAuth(api),
-	}
+	g := s.newGates(api)
 
-	s.registerMe(api, authed)
+	s.registerAuth(api, g)
+	s.registerMe(api, g)
 
 	return r
 }

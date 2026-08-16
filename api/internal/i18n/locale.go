@@ -47,6 +47,16 @@ type Prefs struct {
 // LocaleFrom resolves the request's locale by walking the four-source
 // cascade. It never returns the zero value — the worst case is English.
 func LocaleFrom(ctx context.Context, r *http.Request) language.Tag {
+	// Kept for the chi path. The whole decision depends on one header, so the
+	// real implementation takes that header and both transports share it —
+	// two copies of a cascade would eventually disagree about what language a
+	// reader gets, and nobody would notice until a customer complained.
+	return LocaleFromHeader(ctx, r.Header.Get("Accept-Language"))
+}
+
+// LocaleFromHeader resolves the cascade: the user's stored locale, then their
+// organisation's default, then Accept-Language, then English.
+func LocaleFromHeader(ctx context.Context, acceptLanguage string) language.Tag {
 	if p, ok := PrefsFrom(ctx); ok {
 		if p.UserLocale != "" {
 			if tag, err := language.Parse(p.UserLocale); err == nil {
@@ -60,7 +70,7 @@ func LocaleFrom(ctx context.Context, r *http.Request) language.Tag {
 		}
 	}
 
-	if header := r.Header.Get("Accept-Language"); header != "" {
+	if header := acceptLanguage; header != "" {
 		tags, _, err := language.ParseAcceptLanguage(header)
 		if err == nil && len(tags) > 0 {
 			tag, _, _ := matcher.Match(tags...)

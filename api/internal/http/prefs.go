@@ -1,7 +1,7 @@
 package http
 
 import (
-	"net/http"
+	"context"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,25 +42,28 @@ type prefsResponse struct {
 
 // handleGetPrefs returns the caller's preferences and shows what they produce.
 // GET /v1/me/preferences
-func (s *Server) handleGetPrefs(w http.ResponseWriter, r *http.Request) {
-	userID, _ := auth.UserIDFrom(r.Context())
+// preferences builds the response body: what is stored, plus what the cascade
+// actually resolved for THIS request, plus the same instant rendered three
+// ways so the effect of the choice is visible rather than asserted.
+//
+// Shared by the chi and huma paths so they cannot answer differently.
+func (s *Server) preferences(ctx context.Context) (prefsResponse, error) {
+	userID, _ := auth.UserIDFrom(ctx)
 	uid, err := uuid.Parse(userID)
 	if err != nil {
-		s.handleError(w, r, err)
-		return
+		return prefsResponse{}, err
 	}
-	row, err := db.New(s.pool).GetUserPreferences(r.Context(), db.GetUserPreferencesParams{ID: uid})
+	row, err := db.New(s.pool).GetUserPreferences(ctx, db.GetUserPreferencesParams{ID: uid})
 	if err != nil {
-		s.handleError(w, r, err)
-		return
+		return prefsResponse{}, err
 	}
 
-	tag := i18n.LocaleFromCtx(r.Context())
-	tz := i18n.TimezoneFromCtx(r.Context())
-	// Stored in UTC (Chapter 33's rule), converted only here, for a human.
+	tag := i18n.LocaleFromCtx(ctx)
+	tz := i18n.TimezoneFromCtx(ctx)
+	// Stored in UTC, converted only here, only for a human to read.
 	now := time.Now().UTC()
 
-	writeJSON(w, http.StatusOK, prefsResponse{
+	return prefsResponse{
 		Locale:   row.Locale,
 		Timezone: row.Timezone,
 		Resolved: tag.String(),
@@ -70,46 +73,31 @@ func (s *Server) handleGetPrefs(w http.ResponseWriter, r *http.Request) {
 		// 1900 minor units of USD. Not 19.00, which is a float and therefore
 		// not a price.
 		Price: i18n.FormatMoney(1900, "USD"),
-	})
+	}, nil
 }
 
-// handleSetPrefs stores the caller's locale and timezone.
-// PATCH /v1/me/preferences
-func (s *Server) handleSetPrefs(w http.ResponseWriter, r *http.Request) {
-	userID, _ := auth.UserIDFrom(r.Context())
+// savePreferences validates and stores locale and timezone.
+//
+// Both are rejected at the boundary rather than stored and re-parsed on every
+// future request. A bad locale saved once is a bad locale parsed forever.
+func (s *Server) savePreferences(ctx context.Context, locale, timezone string) error {
+	userID, _ := auth.UserIDFrom(ctx)
 	uid, err := uuid.Parse(userID)
 	if err != nil {
-		s.handleError(w, r, err)
-		return
+		return err
 	}
-	var req prefsRequest
-	if err := decodeAndValidate(r, &req); err != nil {
-		s.handleError(w, r, err)
-		return
-	}
-	// Reject nonsense at the boundary rather than storing it and failing to
-	// parse it on every future request.
-	if req.Locale != "" {
-		if _, err := language.Parse(req.Locale); err != nil {
-			writeError(w, http.StatusUnprocessableEntity, "invalid_locale",
-				"locale must be a BCP-47 language tag, e.g. \"de\" or \"pt-BR\"")
-			return
+	if locale != "" {
+		if _, err := language.Parse(locale); err != nil {
+			return &bodyError{msg: `locale must be a BCP-47 language tag, e.g. "de" or "pt-BR"`}
 		}
 	}
-	if req.Timezone == "" {
-		req.Timezone = "UTC"
+	if timezone == "" {
+		timezone = "UTC"
 	}
-	if _, err := time.LoadLocation(req.Timezone); err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "invalid_timezone",
-			"timezone must be an IANA name, e.g. \"Europe/Berlin\"")
-		return
+	if _, err := time.LoadLocation(timezone); err != nil {
+		return &bodyError{msg: `timezone must be an IANA name, e.g. "Europe/Berlin"`}
 	}
-
-	if err := db.New(s.pool).SetUserPreferences(r.Context(), db.SetUserPreferencesParams{
-		ID: uid, Locale: req.Locale, Timezone: req.Timezone,
-	}); err != nil {
-		s.handleError(w, r, err)
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
+	return db.New(s.pool).SetUserPreferences(ctx, db.SetUserPreferencesParams{
+		ID: uid, Locale: locale, Timezone: timezone,
+	})
 }
