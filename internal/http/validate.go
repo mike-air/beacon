@@ -137,6 +137,38 @@ func parsePaging(r *http.Request) (limit, offset int) {
 	return limit, offset
 }
 
+// writeList answers with the one list envelope, paging an already-loaded
+// slice.
+//
+// Five of the nine list endpoints used to answer a bare {"items": [...]}
+// instead — so a client needed a special case per URL, and the ones written
+// against the documented shape broke on the undocumented one. Routing every
+// list through here means a new endpoint gets the right shape by default
+// rather than by remembering.
+//
+// The slice is paged here rather than in SQL for the endpoints whose result
+// sets are inherently small (a user's orgs, an org's members, a task's
+// comments and files, an org's webhooks). Those queries load everything
+// anyway; paging in the handler makes the response honest without pretending
+// the database did work it did not do. The endpoints that CAN return
+// unbounded rows — projects, tasks, search — page in SQL, and pass their
+// already-limited slice straight through.
+func writeList[T any](w http.ResponseWriter, r *http.Request, items []T) {
+	limit, offset := parsePaging(r)
+	if offset > len(items) {
+		offset = len(items)
+	}
+	end := offset + limit
+	if end > len(items) {
+		end = len(items)
+	}
+	writeJSON(w, http.StatusOK, listResponse{
+		Items:  items[offset:end],
+		Limit:  limit,
+		Offset: offset,
+	})
+}
+
 // listResponse is the shape every paginated list endpoint returns.
 type listResponse struct {
 	Items  any `json:"items"`

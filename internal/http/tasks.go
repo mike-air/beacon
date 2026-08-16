@@ -134,5 +134,5 @@ func (s *Server) handleListComments(w http.ResponseWriter, r *http.Request) {
 		s.handleError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": list})
+	writeList(w, r, list)
 }

@@ -42,7 +42,7 @@ func (s *Server) handleListWebhooks(w http.ResponseWriter, r *http.Request) {
 		s.handleError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": list})
+	writeList(w, r, list)
 }
 
 // handleDeleteWebhook removes a webhook. DELETE .../webhooks/{webhookID}.
