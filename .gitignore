@@ -1,0 +1,17 @@
+# Go
+/api/bin/
+/api/coverage.out
+/api/tmp/
+
+# Node
+node_modules/
+/web/dist/
+/web/test-results/
+/web/playwright-report/
+/web/src/styles/tokens.gen.css
+/web/src/design/tokens.gen.ts
+
+# Local environment
+.env
+.env.local
+.DS_Store
