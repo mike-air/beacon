@@ -62,12 +62,24 @@ call per item where it used to make one call per batch.
 that is what turns a throttle into a ban.
 
 ```bash
-# a. Turn our own send rate down to below the documented quota.
-flyctl secrets set BEACON_STRIPE_RPS=10 --app beacon-api-blue
-
-# b. Reduce worker concurrency so fewer calls go out at once.
+# a. Reduce worker concurrency so fewer calls go out at once. This is the
+#    real lever: every outbound call Beacon makes — webhook deliveries and
+#    email — is made by a worker, so concurrency IS the send rate.
 flyctl secrets set WORKER_CONCURRENCY=1 --app beacon-worker
 ```
+
+> **There is no per-upstream rate limit.** An earlier version of this runbook
+> told you to set `BEACON_STRIPE_RPS`. Nothing reads that variable — no Go
+> file references it, and Beacon has no payments integration at all. Setting
+> it does nothing, which is the worst possible property for a mitigation step
+> in an incident: it looks like you have acted, and you have not.
+>
+> Until a real outbound limiter exists (see the work-list in
+> [READING.md](../../READING.md)), `WORKER_CONCURRENCY` and parking the retry
+> storm below are the only levers that actually change the outbound rate.
+> Verify that any knob a runbook names is read by
+> [internal/config/config.go](../../internal/config/config.go) before you
+> trust it.
 
 **Stop the retry storm.** Park the jobs that are only burning quota, so the ones
 that can succeed get through:

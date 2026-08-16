@@ -100,6 +100,19 @@ func withETag(next http.Handler) http.Handler {
 	})
 }
 
+// bufferingWriter holds the whole response so withETag can hash it before
+// deciding whether to send 304.
+//
+// It deliberately has no Flush, and must never wrap a streaming handler.
+// Two things break if it does. It embeds the http.ResponseWriter INTERFACE,
+// which does not carry Flush, so the handler's `w.(http.Flusher)` assertion
+// fails and SSE cannot start. And even with a Flush bolted on, Write appends
+// to b.body and never writes through, so flushing would emit nothing and the
+// client would hang on an open connection that never speaks.
+//
+// This is safe today only because withETag is mounted per-route, on GET one
+// project. Moving it up the chain — where it would cover /events — is the
+// change that turns this comment into an outage.
 type bufferingWriter struct {
 	http.ResponseWriter
 	status  int
