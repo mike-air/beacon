@@ -290,63 +290,19 @@ func (s *Server) Routes() http.Handler {
 			// absent here. Conversion is route by route on purpose: the two
 			// paths coexist on the same router, so each one can be moved and
 			// verified without a flag day.
-			r.Post("/orgs", s.handleCreateOrg)
-			r.Get("/orgs", s.handleListOrgs)
 
 			// Org-scoped routes. requireOrg loads the caller's membership and
 			// puts their role in context; requireRole gates owner/admin actions.
 			r.Route("/orgs/{orgID}", func(r chi.Router) {
 				r.Use(s.requireOrg)
 
-				// Ch 29–30 — search across every entity in this org.
-				r.Get("/search", s.handleSearch)
-
-				r.Get("/members", s.handleListMembers)
-				r.With(s.requireRole(orgs.RoleAdmin)).Post("/members", s.handleAddMember)
-
 				// Real-time SSE stream for the org (Ch 25).
 				r.Get("/events", s.handleEvents)
 
-				// Outgoing webhooks (Ch 24) — owner/admin only.
-				r.Route("/webhooks", func(r chi.Router) {
-					r.Use(s.requireRole(orgs.RoleAdmin))
-					r.Get("/", s.handleListWebhooks)
-					r.Post("/", s.handleRegisterWebhook)
-					r.Delete("/{webhookID}", s.handleDeleteWebhook)
-				})
+				// Webhooks are registered through huma (ops_webhooks.go).
 
-				r.Route("/projects", func(r chi.Router) {
-					r.Get("/", s.handleListProjects)
-					r.Post("/", s.handleCreateProject)
-
-					r.Route("/{projectID}", func(r chi.Router) {
-						// Ch 28 — withETag answers 304 when the client's
-						// If-None-Match still matches the row's version.
-						r.With(withETag).Get("/", s.handleGetProject)
-						r.Patch("/", s.handleUpdateProject)
-						r.Delete("/", s.handleDeleteProject)
-
-						r.Route("/tasks", func(r chi.Router) {
-							r.Get("/", s.handleListTasks)
-							r.Post("/", s.handleCreateTask)
-
-							r.Route("/{taskID}", func(r chi.Router) {
-								r.Get("/", s.handleGetTask)
-								r.Patch("/", s.handleUpdateTask)
-								r.Delete("/", s.handleDeleteTask)
-
-								r.Get("/comments", s.handleListComments)
-								r.Post("/comments", s.handleCreateComment)
-
-								// Attachments (Ch 22). Presigned S3 upload/download;
-								// 501 when storage is unconfigured.
-								r.Get("/attachments", s.handleListAttachments)
-								r.Post("/attachments", s.handleCreateAttachment)
-								r.Get("/attachments/{attachmentID}", s.handleGetAttachment)
-							})
-						})
-					})
-				})
+				// projects, tasks, comments and attachments are all registered
+				// through huma (ops_projects.go, ops_tasks.go).
 			})
 		})
 	})
@@ -365,6 +321,11 @@ func (s *Server) Routes() http.Handler {
 
 	s.registerAuth(api, g)
 	s.registerMe(api, g)
+	s.registerOrgs(api, g)
+	s.registerProjects(api, g)
+	s.registerTasks(api, g)
+	s.registerWebhooks(api, g)
+	documentEventStream(api)
 
 	return r
 }
