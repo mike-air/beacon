@@ -9,6 +9,7 @@ package http
 import (
 	"context"
 	"fmt"
+	"github.com/danielgtaylor/huma/v2"
 	"log/slog"
 	"net/http"
 	"time"
@@ -45,6 +46,10 @@ import (
 // *Server, so they reach the pool, logger, and the domain services without
 // globals. The services are constructed once in NewServer (the wiring step).
 type Server struct {
+	// api holds the huma registry so `beacon-api spec` can emit the OpenAPI
+	// document without starting a listener.
+	api huma.API
+
 	cfg    *config.Config
 	logger *slog.Logger
 	pool   *pgxpool.Pool
@@ -284,7 +289,10 @@ func (s *Server) Routes() http.Handler {
 			// Ch 33 — resolve the locale once, per request, for every handler.
 			r.Use(s.localeMiddleware)
 
-			r.Get("/me", s.handleMe)
+			// /v1/me is registered through huma (see ops_me.go) and so is
+			// absent here. Conversion is route by route on purpose: the two
+			// paths coexist on the same router, so each one can be moved and
+			// verified without a flag day.
 			r.Get("/me/preferences", s.handleGetPrefs)
 			r.Patch("/me/preferences", s.handleSetPrefs)
 
@@ -348,6 +356,22 @@ func (s *Server) Routes() http.Handler {
 			})
 		})
 	})
+
+	// ---- the huma layer -------------------------------------------------
+	//
+	// Built AFTER every chi middleware is mounted, because huma registers its
+	// operations on this router and inherits whatever is already on it. The
+	// gates below are the ones chi could not give a huma operation: they need
+	// path parameters or per-operation selection, and huma ignores the nesting
+	// chi would have used to apply them.
+	api := newHumaAPI(r)
+	s.api = api
+
+	authed := huma.Middlewares{
+		s.humaRequireAuth(api),
+	}
+
+	s.registerMe(api, authed)
 
 	return r
 }

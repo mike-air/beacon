@@ -2,7 +2,6 @@ package http
 
 import (
 	"net/http"
-	"strings"
 
 	"beacon/internal/auth"
 )
@@ -30,10 +29,7 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 }
 
 func bearerToken(r *http.Request) (string, bool) {
-	h := r.Header.Get("Authorization")
-	const prefix = "Bearer "
-	if len(h) <= len(prefix) || !strings.EqualFold(h[:len(prefix)], prefix) {
-		return "", false
-	}
-	return strings.TrimSpace(h[len(prefix):]), true
+	// Delegates to the shared parser so the chi path and the huma path can
+	// never disagree about what counts as a valid Authorization header.
+	return bearerFromHeader(r.Header.Get("Authorization"))
 }

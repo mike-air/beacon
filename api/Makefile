@@ -41,3 +41,6 @@ cover: ## Run tests with a coverage profile and print the summary
 
 docker-build: ## Build the production container image
 	docker build -t beacon-api:local .
+
+spec: ## Emit openapi.json from the registered huma operations
+	go run ./cmd/beacon-spec openapi.json

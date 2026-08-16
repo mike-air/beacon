@@ -32,3 +32,13 @@ func RoleFrom(ctx context.Context) (string, bool) {
 	role, ok := ctx.Value(roleKey{}).(string)
 	return role, ok
 }
+
+// UserIDContextKey and RoleContextKey expose the private key types so a
+// middleware layer that builds contexts through someone else's API — huma's
+// WithValue, which takes a key rather than a whole context — can write the
+// same values WithUserID and WithRole write.
+//
+// The keys stay unexported struct types, so no other package can collide with
+// them by using the same string. Only the ability to name them is shared.
+func UserIDContextKey() any { return userIDKey{} }
+func RoleContextKey() any   { return roleKey{} }

@@ -285,3 +285,26 @@ func trimSpace(s string) string {
 	}
 	return s
 }
+
+// ForSpecGeneration returns a config good enough to build the router and no
+// more.
+//
+// Emitting the OpenAPI document requires every route to be registered, and
+// route registration reads a handful of config values. It does not require a
+// database, a cache, a search engine or a secret worth protecting — so this
+// deliberately supplies none of them, and any future code that needs a real
+// one will fail loudly here rather than emit a document that disagrees with
+// the running server.
+func ForSpecGeneration() *Config {
+	return &Config{
+		Env:                  "spec",
+		Port:                 "0",
+		JWTSecret:            "spec-generation-only-not-a-secret",
+		JWTTTL:               time.Hour,
+		CORSOrigins:          []string{"*"},
+		AuthRateLimitRPS:     1,
+		AuthRateLimitBurst:   1,
+		TenantRateLimitRPS:   1,
+		TenantRateLimitBurst: 1,
+	}
+}
