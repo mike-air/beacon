@@ -1,3 +1,4 @@
+import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
@@ -30,18 +31,39 @@ type ButtonProps = Omit<React.ComponentProps<"button">, "color"> &
   VariantProps<typeof button> & {
     /** busy implies disabled — the caller never passes both. (ch13) */
     busy?: boolean;
+    /**
+     * Render the child instead of a <button>, keeping the styles. This is how
+     * a link gets to look like a button without a <button> wrapping an <a>,
+     * which is invalid HTML and confuses every screen reader. (ch13)
+     */
+    asChild?: boolean;
   };
 
-export function Button({ className, variant, size, busy, children, ...rest }: ButtonProps) {
+export function Button({
+  className,
+  variant,
+  size,
+  busy,
+  asChild,
+  children,
+  ...rest
+}: ButtonProps) {
+  const Comp = asChild ? Slot : "button";
   return (
-    <button
-      type="button"
+    <Comp
+      {...(asChild ? {} : { type: "button" as const })}
       {...rest}
       disabled={busy || rest.disabled}
       className={cn(button({ variant, size }), className)}
     >
-      {busy && <Loader2 aria-hidden className="size-3.5 animate-spin" />}
-      {children}
-    </button>
+      {asChild ? (
+        children
+      ) : (
+        <>
+          {busy && <Loader2 aria-hidden className="size-3.5 animate-spin" />}
+          {children}
+        </>
+      )}
+    </Comp>
   );
 }
