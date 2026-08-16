@@ -2,19 +2,13 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
+  lazyRouteComponent,
   Outlet,
   redirect,
 } from "@tanstack/react-router";
 import { isAuthenticated } from "@/api/session";
 import { SignIn } from "@/features/auth/sign-in";
-import { SignUp } from "@/features/auth/sign-up";
-import { Onboarding } from "@/features/onboarding/onboarding";
 import { OrgGate } from "@/features/org/org-gate";
-import { ProjectsIndex } from "@/features/projects/projects-index";
-import { BoardPage } from "@/features/board/board-page";
-import { MembersPage } from "@/features/members/members-page";
-import { SettingsPage } from "@/features/settings/settings-page";
-import { Styleguide } from "@/routes/styleguide";
 import { NotFound } from "@/routes/not-found";
 
 const rootRoute = createRootRoute({ component: Outlet, notFoundComponent: NotFound });
@@ -39,14 +33,14 @@ const signIn = createRoute({
 const signUp = createRoute({
   getParentRoute: () => rootRoute,
   path: "/sign-up",
-  component: SignUp,
+  component: lazyRouteComponent(() => import("@/features/auth/sign-up"), "SignUp"),
 });
 
 const welcome = createRoute({
   getParentRoute: () => rootRoute,
   path: "/welcome",
   beforeLoad: requireAuth,
-  component: Onboarding,
+  component: lazyRouteComponent(() => import("@/features/onboarding/onboarding"), "Onboarding"),
 });
 
 /** Everything inside the shell hangs off one resolved org. */
@@ -60,13 +54,13 @@ const app = createRoute({
 const projectsIndex = createRoute({
   getParentRoute: () => app,
   path: "/",
-  component: ProjectsIndex,
+  component: lazyRouteComponent(() => import("@/features/projects/projects-index"), "ProjectsIndex"),
 });
 
 const board = createRoute({
   getParentRoute: () => app,
   path: "/projects/$projectID",
-  component: BoardPage,
+  component: lazyRouteComponent(() => import("@/features/board/board-page"), "BoardPage"),
   // The open task is in the URL, so a card is a link somebody can send.
   validateSearch: (s: Record<string, unknown>): { task?: string } =>
     typeof s["task"] === "string" ? { task: s["task"] } : {},
@@ -75,19 +69,19 @@ const board = createRoute({
 const members = createRoute({
   getParentRoute: () => app,
   path: "/members",
-  component: MembersPage,
+  component: lazyRouteComponent(() => import("@/features/members/members-page"), "MembersPage"),
 });
 
 const settings = createRoute({
   getParentRoute: () => app,
   path: "/settings",
-  component: SettingsPage,
+  component: lazyRouteComponent(() => import("@/features/settings/settings-page"), "SettingsPage"),
 });
 
 const styleguide = createRoute({
   getParentRoute: () => rootRoute,
   path: "/styleguide",
-  component: Styleguide,
+  component: lazyRouteComponent(() => import("@/routes/styleguide"), "Styleguide"),
 });
 
 const routeTree = rootRoute.addChildren([
