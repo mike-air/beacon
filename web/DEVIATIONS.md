@@ -47,9 +47,12 @@ were unreachable from any browser. `ExposedHeaders` was also empty, so a
 cross-origin script could not read the `ETag` it is supposed to send back, nor
 `Retry-After` on a 429.
 
-**`/v1/orgs` broke the API's own list envelope.** Every other list answers
-`{items, limit, offset}`; that one answered a bare `{items}`. It now uses
-`listResponse` like the rest, paged in the handler.
+**Five of the nine list endpoints broke the API's own list envelope.** Four
+answered `{items, limit, offset}` and five answered a bare `{items}` — so a
+client needed a special case per URL, and one written against the documented
+shape broke on the undocumented one. Every list now goes through one
+`writeList` helper, so a new endpoint gets the right shape by default rather
+than by remembering.
 
 **No OpenAPI document existed.** `npm run generate:api` needs one, so
 `../beacon/openapi.yaml` was written from the handlers. It is now the contract

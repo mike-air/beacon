@@ -49,8 +49,22 @@ export class ApiError extends Error {
     return this.status === 429;
   }
 
-  /** Retrying a 4xx sends the same broken request again. Only these are worth a retry. */
+  /** The server does not have this feature at all — storage is unconfigured. */
+  get isNotImplemented(): boolean {
+    return this.status === 501;
+  }
+
+  /**
+   * Retrying a 4xx sends the same broken request again.
+   *
+   * 501 and 505 are the two 5xx codes that are permanent: "this server does
+   * not implement that" and "not this HTTP version". Retrying them is five
+   * round trips to be told the same thing five times — which is exactly what
+   * this client did to /attachments on a Beacon with no storage configured,
+   * until this line existed.
+   */
   get isRetryable(): boolean {
+    if (this.status === 501 || this.status === 505) return false;
     return this.status === 429 || this.status >= 500;
   }
 

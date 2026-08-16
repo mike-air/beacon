@@ -15,7 +15,7 @@ import { getActiveOrg, setActiveOrg } from "./active-org";
 import { AppShell } from "@/components/layout/app-shell";
 import { useAuth } from "@/features/auth/auth-context";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/components/ui/toast";
+import { CommandPalette } from "@/features/search/command-palette";
 import type { OrgWithRole, User } from "@/api/types";
 
 export type OrgContext = { org: OrgWithRole; user: User | undefined };
@@ -38,12 +38,12 @@ export function useOrgContext(): OrgContext {
 export function OrgGate() {
   const navigate = useNavigate();
   const qc = useQueryClient();
-  const toast = useToast();
   const { signOut } = useAuth();
   const meQuery = useMe();
   const orgsQuery = useOrgs();
   const [activeID, setActiveID] = useState<string | null>(getActiveOrg);
   const [connected, setConnected] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const orgs = useMemo(() => orgsQuery.data?.items ?? [], [orgsQuery.data]);
   const active = orgs.find((o) => o.id === activeID) ?? orgs[0];
@@ -60,6 +60,18 @@ export function OrgGate() {
   useEffect(() => {
     if (orgsQuery.isSuccess && orgs.length === 0) void navigate({ to: "/welcome" });
   }, [orgsQuery.isSuccess, orgs.length, navigate]);
+
+  // ⌘K from anywhere, and Escape is handled by the dialog itself.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setSearchOpen((v) => !v);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   // One stream per org. Every event invalidates rather than patching: the
   // server drops events for slow consumers, so the event is a hint to refetch.
@@ -101,10 +113,11 @@ export function OrgGate() {
       }}
       onCreateOrg={() => void navigate({ to: "/welcome" })}
       onSignOut={signOut}
-      onOpenSearch={() => toast({ title: "Search", description: "Press ⌘K anywhere." })}
+      onOpenSearch={() => setSearchOpen(true)}
     >
       <Ctx.Provider value={{ org: active, user: meQuery.data }}>
         <Outlet />
+        <CommandPalette orgID={active.id} open={searchOpen} onOpenChange={setSearchOpen} />
       </Ctx.Provider>
     </AppShell>
   );

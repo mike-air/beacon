@@ -67,6 +67,9 @@ const board = createRoute({
   getParentRoute: () => app,
   path: "/projects/$projectID",
   component: BoardPage,
+  // The open task is in the URL, so a card is a link somebody can send.
+  validateSearch: (s: Record<string, unknown>): { task?: string } =>
+    typeof s["task"] === "string" ? { task: s["task"] } : {},
 });
 
 const members = createRoute({

@@ -9,9 +9,18 @@ import { Select } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { useOrgContext } from "@/features/org/org-gate";
+import { WebhooksSection } from "@/features/webhooks/webhooks-section";
+
+/**
+ * Radix reserves the empty string for "nothing is selected", so an option
+ * cannot use it as a value — the trigger renders blank instead of showing the
+ * label. Beacon's API, meanwhile, uses "" to mean "no preference, fall back to
+ * the cascade". AUTO is the sentinel between the two, translated at the edges.
+ */
+const AUTO = "__auto__";
 
 const LOCALES = [
-  { value: "", label: "Follow my browser" },
+  { value: AUTO, label: "Follow my browser" },
   { value: "en", label: "English" },
   { value: "de", label: "Deutsch" },
   { value: "fr", label: "Français" },
@@ -20,7 +29,7 @@ const LOCALES = [
 
 /** Whatever the browser knows, plus UTC. Beacon stores IANA names, not offsets. */
 const TIMEZONES = [
-  { value: "", label: "Follow my device" },
+  { value: AUTO, label: "Follow my device" },
   { value: "UTC", label: "UTC" },
   { value: "Africa/Accra", label: "Africa/Accra" },
   { value: "Europe/London", label: "Europe/London" },
@@ -28,6 +37,10 @@ const TIMEZONES = [
   { value: "America/New_York", label: "America/New_York" },
   { value: "Asia/Tokyo", label: "Asia/Tokyo" },
 ];
+
+/** "" (the API's "no preference") <-> AUTO (what the Select can hold). */
+const toSelect = (v: string) => (v === "" ? AUTO : v);
+const toApi = (v: string) => (v === AUTO ? "" : v);
 
 function Row({
   label,
@@ -60,8 +73,8 @@ export function SettingsPage() {
   const save = useMutation({
     mutationFn: () =>
       me.setPreferences({
-        locale: locale ?? prefs.data?.locale ?? "",
-        timezone: timezone ?? prefs.data?.timezone ?? "",
+        locale: toApi(locale ?? prefs.data?.locale ?? ""),
+        timezone: toApi(timezone ?? prefs.data?.timezone ?? ""),
       }),
     onSuccess: (data) => {
       qc.setQueryData(keys.preferences, data);
@@ -102,6 +115,11 @@ export function SettingsPage() {
       </section>
 
       <section className="mt-8">
+        <h2 className="mb-1 font-display text-[13px] tracking-wide text-ink-muted">Webhooks</h2>
+        <WebhooksSection orgID={org.id} role={org.role} />
+      </section>
+
+      <section className="mt-8">
         <h2 className="mb-1 font-display text-[13px] tracking-wide text-ink-muted">You</h2>
         <div className="rounded-(--radius-card) border border-line bg-raised px-4">
           {prefs.isPending && (
@@ -115,14 +133,14 @@ export function SettingsPage() {
             <>
               <Row label="Language" hint="Empty follows your browser.">
                 <Select
-                  value={locale ?? prefs.data.locale}
+                  value={toSelect(locale ?? prefs.data.locale)}
                   onValueChange={setLocale}
                   options={LOCALES}
                 />
               </Row>
               <Row label="Time zone" hint="An IANA name, never an offset.">
                 <Select
-                  value={timezone ?? prefs.data.timezone}
+                  value={toSelect(timezone ?? prefs.data.timezone)}
                   onValueChange={setTimezone}
                   options={TIMEZONES}
                 />
