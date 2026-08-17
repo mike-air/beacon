@@ -47,7 +47,7 @@ describe("positionAt", () => {
     expect(positionAt([1000], -5)).toBe(500);
   });
   it("keeps a column strictly increasing after an insert at every slot", () => {
-    let column = [1000, 2000, 3000];
+    const column = [1000, 2000, 3000];
     for (let slot = 0; slot <= column.length; slot++) {
       const p = positionAt(column, slot);
       const next = [...column, p].sort((a, b) => a - b);
@@ -80,7 +80,7 @@ describe("needsRebalance", () => {
   it.each([1e3, 1e6, 1e9, 1e12])(
     "warns with usable float headroom left at position %s",
     (base) => {
-      let lo = base;
+      const lo = base;
       let hi = base + GAP;
       let inserts = 0;
       while (!needsRebalance([lo, hi]) && inserts < 5000) {
@@ -107,7 +107,7 @@ describe("needsRebalance", () => {
     { base: 1e9, warnsAfter: 21, collidesAfter: 33 },
     { base: 1e12, warnsAfter: 11, collidesAfter: 23 },
   ])("warns after $warnsAfter and collides after $collidesAfter at $base", (c) => {
-    let lo = c.base;
+    const lo = c.base;
     let hi = c.base + GAP;
     let warned = 0;
     while (!needsRebalance([lo, hi])) {
@@ -117,7 +117,7 @@ describe("needsRebalance", () => {
     expect(warned).toBe(c.warnsAfter);
 
     // Keep halving past the warning to find where float64 actually gives up.
-    let l = c.base;
+    const l = c.base;
     let h = c.base + GAP;
     let collided = 0;
     for (;;) {
@@ -144,7 +144,7 @@ describe("needsRebalance", () => {
 
   it("does not fire on positions produced by ordinary use", () => {
     // 200 appends, then an insert between each neighbouring pair.
-    let column = Array.from({ length: 200 }, (_, i) => (i + 1) * GAP);
+    const column = Array.from({ length: 200 }, (_, i) => (i + 1) * GAP);
     for (let i = 1; i < column.length; i += 2) {
       column.push(positionAt(column, i));
       column.sort((a, b) => a - b);

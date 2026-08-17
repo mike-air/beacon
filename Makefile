@@ -88,10 +88,23 @@ test-web: ## Vitest unit and component tests
 e2e: ## Playwright against a REAL Beacon — needs `make up && make api` first
 	cd web && npm run e2e
 
+.PHONY: visual
+visual: ## Visual regression: the built image vs the committed screenshots
+	./web/deploy/visual.sh
+
+.PHONY: visual-update
+visual-update: ## Re-record the visual baselines after an intended change
+	./web/deploy/visual.sh --update
+
+.PHONY: images
+images: ## Build both production container images
+	$(MAKE) -C api docker-build
+	docker build -f web/Dockerfile -t beacon-web:local .
+
 .PHONY: lint
-lint: ## Vet the Go, typecheck the TypeScript
+lint: ## Vet the Go, lint and typecheck the TypeScript
 	$(MAKE) -C api vet
-	cd web && npm run typecheck
+	cd web && npm run lint && npm run typecheck
 
 .PHONY: build
 build: ## Build both halves, enforcing the frontend performance budget

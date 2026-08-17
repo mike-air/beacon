@@ -21,8 +21,9 @@
  */
 import { getToken } from "./session";
 
-/** Where the API lives. The SDK is configured with the same value in main.tsx. */
-export const API_BASE: string = import.meta.env["VITE_API_BASE"] ?? "http://localhost:8080";
+/** Where the API lives. One resolution, shared with the SDK's configuration. */
+export { API_BASE } from "./config";
+import { API_BASE } from "./config";
 
 export type SseEvent = { type: string; data: unknown };
 

@@ -17,6 +17,7 @@ import { AuthProvider } from "@/features/auth/auth-context";
 import { watchTheme } from "@/lib/theme";
 import { router } from "@/routes/router";
 import { clearToken, getToken } from "@/api/session";
+import { API_BASE } from "@/api/config";
 
 watchTheme();
 
@@ -34,7 +35,7 @@ watchTheme();
  * nothing to retry with; ending the session is the only correct response.
  */
 configureBeacon({
-  baseUrl: import.meta.env["VITE_API_BASE"] ?? "http://localhost:8080",
+  baseUrl: API_BASE,
   getToken,
   onUnauthenticated: () => {
     clearToken();

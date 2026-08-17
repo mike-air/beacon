@@ -221,6 +221,7 @@ budget in a document is a budget nobody checks.
 
 ## What is verified, and what is not
 
+- `npm run lint` / `npm run typecheck` — ESLint and `tsc --noEmit`.
 - `npm run test` — 45 unit and component tests, no server needed.
 - `npm run e2e` — 13 Playwright tests against a **real** Beacon on `:8080`,
   not a mock. They share one account per run on purpose: a test that signs up
@@ -228,9 +229,21 @@ budget in a document is a budget nobody checks.
   correctly. Read `e2e/helpers.ts` before adding one.
 - `npm run build` runs `gen:tokens`, `tsc --noEmit`, the Vite build and the
   budget check, in that order. Any of the four can fail it.
+- `make visual` (from the repository root) — Playwright, against the built
+  **container image**, not `vite dev` and not your host OS. Both the app and
+  the browser run in Linux so the baselines match CI; see
+  `playwright.visual.config.ts` for why that is not optional. Read the header
+  comment in `visual/styleguide.spec.ts` before trusting a green run — it
+  records exactly what was broken on purpose to prove the suite catches it,
+  and what it does not cover yet (the board, which needs a session).
+- `.github/workflows/ci.yml` runs all of the above, plus the Go tests, on
+  every push. Its job order is deliberate: `contract` first, alone, because a
+  regenerated-but-uncommitted SDK is the fastest thing to catch.
 
-Not verified: there is no visual regression suite, and no production container
-for this half yet. `DEVIATIONS.md` is the standing list of what was built
+Not yet verified: there is no production container image *published*
+anywhere — `Dockerfile` here and `../api/Dockerfile` both build and were run
+locally, but nothing pushes them to a registry, because none is configured
+for this project. `DEVIATIONS.md` is the standing list of what was built
 differently from the course and why.
 
 ## Small changes worth making, if you want a way in
@@ -242,6 +255,7 @@ differently from the course and why.
    repairs the column. Adding the endpoint is a server change and a client
    one, which makes it the first change that exercises the whole contract
    chain: Go struct, `make sdk`, then the call site.
-3. There is no visual regression test. The styleguide route
-   (`/styleguide`) renders every primitive in both themes, which is one
-   screenshot away from being the fixture for one.
+3. The visual suite covers the primitives and the two screens that render
+   without a server. Extending it to the board needs a signed-in session and
+   seeded data — closer to `e2e/helpers.ts` than to `visual/`, and a good
+   second exercise once the first one is done.
