@@ -114,7 +114,7 @@ export function CommandPalette({
 
         <div className="mt-3 max-h-80 overflow-y-auto">
           {raw.trim().length > 0 && raw.trim().length < 2 && (
-            <p className="px-1 py-6 text-center text-[13px] text-ink-faint">
+            <p className="px-1 py-6 text-center text-ui text-ink-faint">
               Two characters or more.
             </p>
           )}
@@ -131,7 +131,7 @@ export function CommandPalette({
               <div className="mx-auto w-32 opacity-90">
                 <EmptySearch />
               </div>
-              <p className="mt-2 text-center text-[13px] text-ink-muted">
+              <p className="mt-2 text-center text-ui text-ink-muted">
                 Nothing matched “{q}”.
               </p>
             </div>
@@ -154,11 +154,11 @@ export function CommandPalette({
                     >
                       <Icon aria-hidden className="mt-0.5 size-3.5 shrink-0 text-ink-faint" />
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13.5px] text-ink">
+                        <span className="block truncate text-ui text-ink">
                           <Highlight text={hit.title} />
                         </span>
                         {hit.snippet && (
-                          <span className="mt-0.5 block truncate text-[12px] text-ink-muted">
+                          <span className="mt-0.5 block truncate text-caption text-ink-muted">
                             <Highlight text={hit.snippet} />
                           </span>
                         )}
@@ -176,7 +176,7 @@ export function CommandPalette({
 
         {query.isSuccess && (
           <div className="mt-3 flex items-center gap-2 border-t border-line pt-3">
-            <span className="font-mono text-[10.5px] text-ink-faint">
+            <span className="font-mono text-micro text-ink-faint">
               {hits.length} {hits.length === 1 ? "result" : "results"}
             </span>
             <div className="flex-1" />

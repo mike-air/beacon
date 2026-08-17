@@ -5,7 +5,7 @@ export function Skeleton({ className, ...rest }: React.ComponentProps<"div">) {
     <div
       aria-hidden
       {...rest}
-      className={cn("animate-pulse rounded-md bg-well", className)}
+      className={cn("animate-pulse rounded-(--radius-ctl) bg-well", className)}
     />
   );
 }

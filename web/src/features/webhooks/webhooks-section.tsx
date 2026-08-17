@@ -34,14 +34,14 @@ function SecretOnce({ secret, onDone }: { secret: string; onDone: () => void }) 
   const toast = useToast();
   return (
     <div className="rounded-(--radius-ctl) bg-warning-subtle p-3.5">
-      <p className="text-[13px] font-medium text-warning-text">
+      <p className="text-ui font-medium text-warning-text">
         Copy this signing secret now
       </p>
-      <p className="mt-1 text-[12.5px] text-ink-muted">
+      <p className="mt-1 text-caption text-ink-muted">
         It is shown once. Beacon cannot show it again.
       </p>
       <div className="mt-2.5 flex items-center gap-2">
-        <code className="min-w-0 flex-1 truncate rounded bg-page px-2.5 py-1.5 font-mono text-[12px] text-ink">
+        <code className="min-w-0 flex-1 truncate rounded bg-page px-2.5 py-1.5 font-mono text-caption text-ink">
           {secret}
         </code>
         <Button
@@ -116,7 +116,7 @@ function RegisterDialog({
               )}
             </Field>
             <fieldset className="mt-4">
-              <legend className="mb-2 text-[13px] font-medium text-ink">Events</legend>
+              <legend className="mb-2 text-ui font-medium text-ink">Events</legend>
               <div className="space-y-2">
                 {EVENTS.map((e) => (
                   <Checkbox
@@ -130,7 +130,7 @@ function RegisterDialog({
                 ))}
               </div>
               {selected.length === 0 && (
-                <p className="mt-2 text-[12px] text-ink-muted">
+                <p className="mt-2 text-caption text-ink-muted">
                   None selected means every event.
                 </p>
               )}
@@ -170,7 +170,7 @@ export function WebhooksSection({ orgID, role }: { orgID: string; role: Role }) 
   // anything.
   if (!canAdmin) {
     return (
-      <p className="rounded-(--radius-card) border border-line bg-raised px-4 py-3.5 text-[13px] text-ink-muted">
+      <p className="rounded-(--radius-card) border border-line bg-raised px-4 py-3.5 text-ui text-ink-muted">
         Webhooks are managed by owners and admins.
       </p>
     );
@@ -188,7 +188,7 @@ export function WebhooksSection({ orgID, role }: { orgID: string; role: Role }) 
       {query.isPending && <Skeleton className="h-20 rounded-(--radius-card)" />}
 
       {query.isSuccess && query.data.items.length === 0 && (
-        <p className="rounded-(--radius-card) border border-line bg-raised px-4 py-3.5 text-[13px] text-ink-muted">
+        <p className="rounded-(--radius-card) border border-line bg-raised px-4 py-3.5 text-ui text-ink-muted">
           No webhooks yet. Register one to get task events POSTed to your own service.
         </p>
       )}
@@ -202,7 +202,7 @@ export function WebhooksSection({ orgID, role }: { orgID: string; role: Role }) 
             >
               <WebhookIcon aria-hidden className="mt-0.5 size-4 shrink-0 text-ink-faint" />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-mono text-[12.5px] text-ink">{w.url}</p>
+                <p className="truncate font-mono text-caption text-ink">{w.url}</p>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
                   {w.events.length === 0 ? (
                     <Badge>all events</Badge>

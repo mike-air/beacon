@@ -154,7 +154,7 @@ export function BoardPage() {
         <h1 className="font-display text-xl tracking-tight text-ink">{project?.name ?? "Board"}</h1>
         {projects.data?.board === "v2" && <Badge tone="volt">new board</Badge>}
         <div className="flex-1" />
-        <span className="font-mono text-[11.5px] text-ink-faint">
+        <span className="font-mono text-label text-ink-faint">
           {items.length} {items.length === 1 ? "task" : "tasks"}
         </span>
       </div>
@@ -228,9 +228,9 @@ export function BoardPage() {
                   isOver ? "border-accent bg-accent-subtle/40" : "border-line bg-page",
                 )}
               >
-                <h2 className="mb-2 flex items-center gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+                <h2 className="mb-2 flex items-center gap-2 px-1 text-label font-medium uppercase tracking-wide text-ink-muted">
                   {STATUS_LABEL[status]}
-                  <span className="rounded-full bg-well px-1.5 font-mono text-[10px]">
+                  <span className="rounded-full bg-well px-1.5 font-mono text-micro">
                     {column.length}
                   </span>
                 </h2>

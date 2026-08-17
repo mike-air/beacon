@@ -60,7 +60,7 @@ export function TaskCard({
         aria-label={`Open "${task.title}"`}
         className="min-w-0 flex-1 py-0.5 text-left"
       >
-        <p className="text-[13.5px] leading-snug text-ink">{task.title}</p>
+        <p className="text-ui leading-snug text-ink">{task.title}</p>
       </button>
 
       <MenuRoot>

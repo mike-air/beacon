@@ -28,7 +28,7 @@ export function FormError({ error }: { error: unknown }) {
       className="mb-4 flex items-start gap-2 rounded-(--radius-ctl) bg-danger-subtle px-3 py-2.5"
     >
       <AlertTriangle className="mt-px size-4 shrink-0 text-danger-text" />
-      <p className="text-[13px] text-danger-text">{message}</p>
+      <p className="text-ui text-danger-text">{message}</p>
     </div>
   );
 }

@@ -42,7 +42,7 @@ function Progress({ step }: { step: number }) {
             <span
               aria-current={current ? "step" : undefined}
               className={cn(
-                "flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold transition-colors",
+                "flex size-5 shrink-0 items-center justify-center rounded-full text-micro font-semibold transition-colors",
                 done && "bg-success text-on-accent",
                 current && "bg-accent text-on-accent",
                 !done && !current && "bg-well text-ink-faint",
@@ -52,7 +52,7 @@ function Progress({ step }: { step: number }) {
             </span>
             <span
               className={cn(
-                "hidden text-[12px] sm:block",
+                "hidden text-caption sm:block",
                 current ? "font-medium text-ink" : "text-ink-faint",
               )}
             >
@@ -95,7 +95,7 @@ function Card({
   return (
     <div className="rounded-(--radius-card) border border-line bg-raised p-5">
       <h1 className="font-display text-xl tracking-tight text-ink">{title}</h1>
-      <p className="mt-1.5 text-[13.5px] text-ink-muted">{description}</p>
+      <p className="mt-1.5 text-ui text-ink-muted">{description}</p>
       <div className="mt-5">{children}</div>
     </div>
   );
@@ -180,7 +180,7 @@ function StepInvite({ orgID, onDone }: { orgID: string; onDone: () => void }) {
             )}
           </Field>
           <div>
-            <p className="mb-1.5 text-[13px] font-medium text-ink">Role</p>
+            <p className="mb-1.5 text-ui font-medium text-ink">Role</p>
             <Select
               value={role}
               onValueChange={(v) => form.setValue("role", v as InviteValues["role"])}
@@ -196,7 +196,7 @@ function StepInvite({ orgID, onDone }: { orgID: string; onDone: () => void }) {
         {added.length > 0 && (
           <ul className="mt-4 space-y-1.5">
             {added.map((e) => (
-              <li key={e} className="flex items-center gap-2 text-[13px] text-ink-muted">
+              <li key={e} className="flex items-center gap-2 text-ui text-ink-muted">
                 <Check className="size-3.5 text-success-text" strokeWidth={3} />
                 {e}
               </li>

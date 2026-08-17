@@ -18,7 +18,7 @@ type AvatarProps = {
   className?: string;
 };
 
-const sizes = { sm: "size-5 text-[9px]", md: "size-7 text-[11px]", lg: "size-9 text-[13px]" };
+const sizes = { sm: "size-5 text-micro", md: "size-7 text-label", lg: "size-9 text-ui" };
 
 export function Avatar({ name, src, size = "md", className }: AvatarProps) {
   return (

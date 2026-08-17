@@ -113,7 +113,7 @@ export function ProjectsIndex() {
                 className="block rounded-(--radius-card) border border-line bg-raised px-4 py-3.5 transition-colors hover:border-line-strong hover:bg-well/40"
               >
                 <span className="font-medium text-ink">{p.name}</span>
-                <span className="ml-2 font-mono text-[11.5px] text-ink-faint">
+                <span className="ml-2 font-mono text-label text-ink-faint">
                   updated {new Date(p.updated_at).toLocaleDateString()}
                 </span>
               </Link>

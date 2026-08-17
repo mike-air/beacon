@@ -32,7 +32,7 @@ export function MenuItem({
     <Menu.Item
       {...rest}
       className={cn(
-        "flex cursor-default select-none items-center gap-2 rounded-md px-2.5 py-1.5 text-[13px] outline-none",
+        "flex cursor-default select-none items-center gap-2 rounded-(--radius-ctl) px-2.5 py-1.5 text-ui outline-none",
         destructive
           ? "text-danger-text data-highlighted:bg-danger-subtle"
           : "text-ink data-highlighted:bg-well",
@@ -50,7 +50,7 @@ export function MenuLabel({ className, ...rest }: React.ComponentProps<typeof Me
   return (
     <Menu.Label
       {...rest}
-      className={cn("px-2.5 py-1 text-[11px] font-medium text-ink-faint", className)}
+      className={cn("px-2.5 py-1 text-label font-medium text-ink-faint", className)}
     />
   );
 }

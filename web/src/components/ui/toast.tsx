@@ -58,11 +58,11 @@ export function ToastHost({ children }: { children: React.ReactNode }) {
             >
               <Icon className={cn("mt-px size-4 shrink-0", toneText[t.tone ?? "info"])} />
               <div className="min-w-0">
-                <ToastPrimitive.Title className="text-[13px] font-medium text-ink">
+                <ToastPrimitive.Title className="text-ui font-medium text-ink">
                   {t.title}
                 </ToastPrimitive.Title>
                 {t.description && (
-                  <ToastPrimitive.Description className="mt-0.5 text-[12.5px] text-ink-muted">
+                  <ToastPrimitive.Description className="mt-0.5 text-caption text-ink-muted">
                     {t.description}
                   </ToastPrimitive.Description>
                 )}

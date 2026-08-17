@@ -14,7 +14,7 @@ export function Th({ className, ...rest }: React.ComponentProps<"th">) {
     <th
       {...rest}
       className={cn(
-        "border-b border-line px-3 py-2 text-left text-[11.5px] font-medium text-ink-muted",
+        "border-b border-line px-3 py-2 text-left text-label font-medium text-ink-muted",
         className,
       )}
     />

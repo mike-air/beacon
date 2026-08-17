@@ -54,8 +54,8 @@ function Row({
   return (
     <div className="flex flex-col gap-2 border-b border-line py-4 last:border-0 sm:flex-row sm:items-center">
       <div className="sm:w-56">
-        <p className="text-[13.5px] font-medium text-ink">{label}</p>
-        {hint && <p className="mt-0.5 text-[12.5px] text-ink-muted">{hint}</p>}
+        <p className="text-ui font-medium text-ink">{label}</p>
+        {hint && <p className="mt-0.5 text-caption text-ink-muted">{hint}</p>}
       </div>
       <div className="sm:max-w-xs sm:flex-1">{children}</div>
     </div>
@@ -93,19 +93,19 @@ export function SettingsPage() {
       <h1 className="font-display text-xl tracking-tight text-ink">Settings</h1>
 
       <section className="mt-6">
-        <h2 className="mb-1 font-display text-[13px] tracking-wide text-ink-muted">Organisation</h2>
+        <h2 className="mb-1 font-display text-ui tracking-wide text-ink-muted">Organisation</h2>
         <div className="rounded-(--radius-card) border border-line bg-raised px-4">
           <Row label="Name">
             <p className="text-sm text-ink">{org.name}</p>
           </Row>
           <Row label="Slug" hint="Used in URLs.">
-            <p className="font-mono text-[13px] text-ink-muted">{org.slug}</p>
+            <p className="font-mono text-ui text-ink-muted">{org.slug}</p>
           </Row>
           <Row label="Your role">
             <span className="flex items-center gap-2">
               <Badge tone={isAdmin(org.role) ? "accent" : "neutral"}>{org.role}</Badge>
               {!isAdmin(org.role) && (
-                <span className="text-[12.5px] text-ink-muted">
+                <span className="text-caption text-ink-muted">
                   Members cannot change organisation settings.
                 </span>
               )}
@@ -115,12 +115,12 @@ export function SettingsPage() {
       </section>
 
       <section className="mt-8">
-        <h2 className="mb-1 font-display text-[13px] tracking-wide text-ink-muted">Webhooks</h2>
+        <h2 className="mb-1 font-display text-ui tracking-wide text-ink-muted">Webhooks</h2>
         <WebhooksSection orgID={org.id} role={org.role} />
       </section>
 
       <section className="mt-8">
-        <h2 className="mb-1 font-display text-[13px] tracking-wide text-ink-muted">You</h2>
+        <h2 className="mb-1 font-display text-ui tracking-wide text-ink-muted">You</h2>
         <div className="rounded-(--radius-card) border border-line bg-raised px-4">
           {prefs.isPending && (
             <div className="space-y-3 py-4">
@@ -149,7 +149,7 @@ export function SettingsPage() {
                   default, then Accept-Language. Showing what it actually chose
                   makes an empty preference legible instead of mysterious. */}
               <Row label="Right now" hint="What the server resolved for this request.">
-                <div className="space-y-0.5 font-mono text-[12.5px] text-ink-muted">
+                <div className="space-y-0.5 font-mono text-caption text-ink-muted">
                   <p>{prefs.data.resolved_locale} · {prefs.data.now_local}</p>
                   <p>{prefs.data.greeting} · {prefs.data.example_price}</p>
                 </div>

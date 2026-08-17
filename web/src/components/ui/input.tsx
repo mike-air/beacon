@@ -25,7 +25,7 @@ export function Label({ className, ...rest }: React.ComponentProps<"label">) {
   return (
     <label
       {...rest}
-      className={cn("mb-1.5 block text-[13px] font-medium text-ink", className)}
+      className={cn("mb-1.5 block text-ui font-medium text-ink", className)}
     />
   );
 }
@@ -49,9 +49,9 @@ export function Field({
       <Label htmlFor={id}>{label}</Label>
       {children({ id, "aria-describedby": error || hint ? descId : undefined, invalid: !!error })}
       {error ? (
-        <p id={descId} role="alert" className="mt-1 text-[12px] text-danger-text">{error}</p>
+        <p id={descId} role="alert" className="mt-1 text-caption text-danger-text">{error}</p>
       ) : hint ? (
-        <p id={descId} className="mt-1 text-[12px] text-ink-faint">{hint}</p>
+        <p id={descId} className="mt-1 text-caption text-ink-faint">{hint}</p>
       ) : null}
     </div>
   );

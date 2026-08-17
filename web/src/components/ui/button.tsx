@@ -18,7 +18,7 @@ const button = cva(
         danger: "bg-danger text-on-accent hover:opacity-90",
       },
       size: {
-        sm: "h-7 px-2.5 text-[13px]",
+        sm: "h-7 px-2.5 text-ui",
         md: "h-9 px-3.5 text-sm",
         lg: "h-10 px-5 text-sm",
       },

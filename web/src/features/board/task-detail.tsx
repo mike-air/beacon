@@ -138,12 +138,12 @@ export function TaskDetail({
             {STATUS_LABEL[task.status]}
           </Badge>
           <div className="flex-1" />
-          <span className="font-mono text-[10.5px] text-ink-faint">{when(task.updated_at)}</span>
+          <span className="font-mono text-micro text-ink-faint">{when(task.updated_at)}</span>
         </div>
 
         {/* ---- attachments ---- */}
         <section className="mb-5">
-          <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+          <h3 className="mb-2 flex items-center gap-1.5 text-label font-medium uppercase tracking-wide text-ink-muted">
             <Paperclip className="size-3" />
             Files
           </h3>
@@ -152,14 +152,14 @@ export function TaskDetail({
               storage configured. Saying nothing leaves an empty box that looks
               like a bug in the client. */}
           {attachments.isError && (
-            <p className="rounded-(--radius-ctl) bg-warning-subtle px-2.5 py-2 text-[12.5px] text-warning-text">
+            <p className="rounded-(--radius-ctl) bg-warning-subtle px-2.5 py-2 text-caption text-warning-text">
               {storageDisabled
                 ? "File storage is not configured on this server."
                 : "Could not load files."}
             </p>
           )}
           {attachments.isSuccess && attachments.data.items.length === 0 && (
-            <p className="text-[12.5px] text-ink-faint">Nothing attached yet.</p>
+            <p className="text-caption text-ink-faint">Nothing attached yet.</p>
           )}
           {attachments.isSuccess && attachments.data.items.length > 0 && (
             <ul className="space-y-1.5">
@@ -169,8 +169,8 @@ export function TaskDetail({
                   className="flex items-center gap-2 rounded-(--radius-ctl) border border-line px-2.5 py-1.5"
                 >
                   <Paperclip className="size-3.5 shrink-0 text-ink-faint" />
-                  <span className="min-w-0 flex-1 truncate text-[13px] text-ink">{a.filename}</span>
-                  <span className="font-mono text-[10.5px] text-ink-faint">
+                  <span className="min-w-0 flex-1 truncate text-ui text-ink">{a.filename}</span>
+                  <span className="font-mono text-micro text-ink-faint">
                     {bytes(a.size_bytes)}
                   </span>
                 </li>
@@ -202,7 +202,7 @@ export function TaskDetail({
 
         {/* ---- comments ---- */}
         <section>
-          <h3 className="mb-2 text-[11px] font-medium uppercase tracking-wide text-ink-muted">
+          <h3 className="mb-2 text-label font-medium uppercase tracking-wide text-ink-muted">
             Comments
           </h3>
 
@@ -214,13 +214,13 @@ export function TaskDetail({
           )}
 
           {comments.isError && (
-            <p className="rounded-(--radius-ctl) bg-danger-subtle px-2.5 py-2 text-[12.5px] text-danger-text">
+            <p className="rounded-(--radius-ctl) bg-danger-subtle px-2.5 py-2 text-caption text-danger-text">
               Could not load comments.
             </p>
           )}
 
           {comments.isSuccess && comments.data.items.length === 0 && (
-            <p className="text-[12.5px] text-ink-faint">No comments yet.</p>
+            <p className="text-caption text-ink-faint">No comments yet.</p>
           )}
 
           {comments.isSuccess && comments.data.items.length > 0 && (
@@ -229,8 +229,8 @@ export function TaskDetail({
                 <li key={c.id} className="flex gap-2">
                   <Avatar name={c.author_id.slice(0, 2)} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="text-[13px] text-ink">{c.body}</p>
-                    <p className="mt-0.5 font-mono text-[10.5px] text-ink-faint">
+                    <p className="text-ui text-ink">{c.body}</p>
+                    <p className="mt-0.5 font-mono text-micro text-ink-faint">
                       {when(c.created_at)}
                     </p>
                   </div>

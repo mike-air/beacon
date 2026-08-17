@@ -54,6 +54,25 @@
   --radius-card: 10px; /* cards */
   --radius-pop: 12px;  /* overlays */
 
+  /* The sub-body type scale, named by purpose the way radius is — not by
+     t-shirt size, because "sm vs xs" answers nothing about where a size
+     belongs and "label vs caption" does. Five steps, chosen from what this
+     app actually renders rather than a stock ramp: every arbitrary
+     text-[Npx] value that existed before this scale clustered around one of
+     these five, usually two or three drifted variants of the same intent
+     (11px and 11.5px in adjacent files, for one). Collapsing the drift is
+     the point — a sixth size someone reaches for next should be a decision,
+     not an accident.
+     text-sm (14px, Tailwind's stock value) sits between --text-ui and
+     --text-title and is left alone: it is what buttons, inputs, selects and
+     the table already use, correctly, and redefining it here would move
+     four components that were never part of this drift. */
+  --text-micro: 10px;   /* count badges, kbd hints, timestamps, "why" captions */
+  --text-label: 11px;   /* uppercase section labels, table headers, tooltips */
+  --text-caption: 12px; /* hints, input errors, secondary descriptions */
+  --text-ui: 13px;      /* the working size: form labels, most UI copy */
+  --text-title: 15px;   /* component-level headings: dialog title, wordmark */
+
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 1px rgb(0 0 0 / 0.03);
   --shadow-pop: 0 4px 16px rgb(0 0 0 / 0.10), 0 1px 3px rgb(0 0 0 / 0.06);
 

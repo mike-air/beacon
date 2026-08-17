@@ -20,7 +20,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="border-b border-line py-8">
-      <h2 className="mb-4 font-display text-[13px] tracking-wide text-ink-muted">{title}</h2>
+      <h2 className="mb-4 font-display text-ui tracking-wide text-ink-muted">{title}</h2>
       {children}
     </section>
   );
@@ -32,8 +32,8 @@ function Swatch({ name }: { name: TokenName }) {
     <div className="w-40 overflow-hidden rounded-(--radius-card) border border-line">
       <div className="h-12" style={{ background: `var(--${name})` }} />
       <div className="border-t border-line bg-raised px-2.5 py-1.5">
-        <div className="font-mono text-[11px] text-ink">{name}</div>
-        <div className="mt-0.5 text-[10.5px] leading-snug text-ink-faint">{t.why}</div>
+        <div className="font-mono text-label text-ink">{name}</div>
+        <div className="mt-0.5 text-micro leading-snug text-ink-faint">{t.why}</div>
       </div>
     </div>
   );
@@ -60,7 +60,7 @@ export function Styleguide() {
           <Wordmark live />
           <Badge tone="accent">styleguide</Badge>
           <div className="flex-1" />
-          <span className="flex items-center gap-1.5 font-mono text-[11.5px] text-ink-muted">
+          <span className="flex items-center gap-1.5 font-mono text-label text-ink-muted">
             <span className="size-2 rounded-full bg-volt animate-beacon" />
             LIVE
           </span>
@@ -72,7 +72,7 @@ export function Styleguide() {
         <div className="py-10">
           <h1 className="font-display text-3xl tracking-tight text-ink">The design system</h1>
           <p className="mt-2 max-w-2xl text-ink-muted">
-            Every color here comes from <code className="font-mono text-[12.5px] text-accent-text">tokens.source.ts</code>.
+            Every color here comes from <code className="font-mono text-caption text-accent-text">tokens.source.ts</code>.
             Nothing in this page carries a hex code, and the theme switch re-resolves all of it.
           </p>
         </div>
@@ -92,7 +92,7 @@ export function Styleguide() {
             <p className="font-display text-3xl tracking-tight text-ink">Archivo Black — display</p>
             <p className="text-ink">Space Grotesk — body and UI, 14px, the working weight.</p>
             <p className="text-ink-muted">Space Grotesk muted — descriptions and secondary lines.</p>
-            <p className="font-mono text-[13px] text-ink-muted">JetBrains Mono — 4 tasks · TSK-1042 · ⌘K</p>
+            <p className="font-mono text-ui text-ink-muted">JetBrains Mono — 4 tasks · TSK-1042 · ⌘K</p>
           </div>
         </Section>
 
@@ -136,7 +136,7 @@ export function Styleguide() {
               {(p) => <Input {...p} defaultValue="acme" />}
             </Field>
             <div>
-              <p className="mb-1.5 text-[13px] font-medium text-ink">Role</p>
+              <p className="mb-1.5 text-ui font-medium text-ink">Role</p>
               <Select
                 value={role}
                 onValueChange={setRole}
@@ -173,7 +173,7 @@ export function Styleguide() {
                 <Button variant="secondary"><Search className="size-3.5" />Filter</Button>
               </PopoverTrigger>
               <PopoverContent>
-                <p className="mb-2 text-[13px] font-medium text-ink">Filter tasks</p>
+                <p className="mb-2 text-ui font-medium text-ink">Filter tasks</p>
                 <div className="space-y-2">
                   <Checkbox label="Assigned to me" />
                   <Checkbox label="Has attachments" />
@@ -235,7 +235,7 @@ export function Styleguide() {
                       {m.n}
                     </span>
                   </Td>
-                  <Td className="font-mono text-[12.5px] text-ink-muted">{m.r}</Td>
+                  <Td className="font-mono text-caption text-ink-muted">{m.r}</Td>
                   <Td>
                     <Badge tone={m.s === "active" ? "success" : "neutral"}>{m.s}</Badge>
                   </Td>
@@ -254,12 +254,12 @@ export function Styleguide() {
         </Section>
 
         <Section title="Motion — subtle, and it stops for prefers-reduced-motion">
-          <div className="flex flex-wrap items-center gap-6 text-[13px] text-ink-muted">
+          <div className="flex flex-wrap items-center gap-6 text-ui text-ink-muted">
             <span className="flex items-center gap-2">
               <span className="size-2.5 rounded-full bg-volt animate-beacon" /> live pulse
             </span>
             <span className="flex items-center gap-2">
-              <span className="rounded-md px-2 py-1 animate-volt-wash">row updated by a teammate</span>
+              <span className="rounded-(--radius-ctl) px-2 py-1 animate-volt-wash">row updated by a teammate</span>
             </span>
           </div>
         </Section>

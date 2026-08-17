@@ -28,11 +28,11 @@ export function DialogContent({
           className,
         )}
       >
-        <DialogPrimitive.Title className="text-[15px] font-semibold text-ink">
+        <DialogPrimitive.Title className="text-title font-semibold text-ink">
           {title}
         </DialogPrimitive.Title>
         {description ? (
-          <DialogPrimitive.Description className="mt-1 text-[13px] text-ink-muted">
+          <DialogPrimitive.Description className="mt-1 text-ui text-ink-muted">
             {description}
           </DialogPrimitive.Description>
         ) : (
@@ -42,7 +42,7 @@ export function DialogContent({
         <div className="mt-4">{children}</div>
         <DialogPrimitive.Close
           aria-label="Close"
-          className="absolute right-3.5 top-3.5 rounded-md p-1 text-ink-faint transition-colors hover:bg-well hover:text-ink"
+          className="absolute right-3.5 top-3.5 rounded-(--radius-ctl) p-1 text-ink-faint transition-colors hover:bg-well hover:text-ink"
         >
           <X className="size-4" />
         </DialogPrimitive.Close>

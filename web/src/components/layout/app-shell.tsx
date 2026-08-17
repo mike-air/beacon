@@ -62,7 +62,7 @@ export function AppShell({
         <div className="flex h-13 items-center gap-2 px-4">
           <Link to="/" aria-label="Beacon home" className="flex items-center gap-2 pr-1">
             <Logo live={connected} size={20} />
-            <span className="hidden font-display text-[14px] tracking-tight text-ink sm:inline">
+            <span className="hidden font-display text-title tracking-tight text-ink sm:inline">
               BEACON
             </span>
           </Link>
@@ -88,7 +88,7 @@ export function AppShell({
           >
             <Search className="size-3.5" />
             <span className="hidden sm:inline">Search</span>
-            <kbd className="ml-1 hidden rounded bg-well px-1.5 py-px font-mono text-[10px] text-ink-faint sm:inline">
+            <kbd className="ml-1 hidden rounded bg-well px-1.5 py-px font-mono text-micro text-ink-faint sm:inline">
               ⌘K
             </kbd>
           </Button>
@@ -136,7 +136,7 @@ export function AppShell({
                 key={t.to}
                 to={t.to}
                 className={cn(
-                  "-mb-px border-b-2 px-2.5 pb-2 pt-0.5 text-[13px] transition-colors",
+                  "-mb-px border-b-2 px-2.5 pb-2 pt-0.5 text-ui transition-colors",
                   active
                     ? "border-accent font-medium text-ink"
                     : "border-transparent text-ink-muted hover:text-ink",

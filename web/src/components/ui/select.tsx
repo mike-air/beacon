@@ -43,7 +43,7 @@ export function Select({
               <SelectPrimitive.Item
                 key={o.value}
                 value={o.value}
-                className="flex cursor-default select-none items-center justify-between rounded-md px-2.5 py-1.5 text-[13px] text-ink outline-none data-highlighted:bg-well"
+                className="flex cursor-default select-none items-center justify-between rounded-(--radius-ctl) px-2.5 py-1.5 text-ui text-ink outline-none data-highlighted:bg-well"
               >
                 <SelectPrimitive.ItemText>{o.label}</SelectPrimitive.ItemText>
                 <SelectPrimitive.ItemIndicator>

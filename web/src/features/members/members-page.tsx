@@ -66,7 +66,7 @@ function AddMemberDialog({
               )}
             </Field>
             <div>
-              <p className="mb-1.5 text-[13px] font-medium text-ink">Role</p>
+              <p className="mb-1.5 text-ui font-medium text-ink">Role</p>
               <Select
                 value={role}
                 onValueChange={(v) => form.setValue("role", v as Values["role"])}

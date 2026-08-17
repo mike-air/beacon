@@ -38,7 +38,7 @@ export function Wordmark({ live = false }: { live?: boolean }) {
   return (
     <span className="inline-flex items-center gap-2">
       <Logo live={live} />
-      <span className="font-display text-[15px] tracking-tight text-ink">BEACON</span>
+      <span className="font-display text-title tracking-tight text-ink">BEACON</span>
     </span>
   );
 }
