@@ -29,7 +29,19 @@ fmt: ## Format all Go files
 	gofmt -w .
 
 test: ## Run unit tests (integration/e2e tests auto-skip without TEST_DATABASE_URL)
-	go test ./...
+	@go test ./...
+	@# Say out loud what was skipped. Without TEST_DATABASE_URL every
+	@# integration and e2e test skips itself and the run still prints "ok" for
+	@# every package — which is how three real bugs (empty response bodies, a
+	@# lost error code, and a dead Idempotency-Key) sat behind a green suite.
+	@# A skip you cannot see is indistinguishable from a pass.
+	@if [ -z "$$TEST_DATABASE_URL" ]; then \
+		echo ""; \
+		echo "  NOTE: TEST_DATABASE_URL is unset, so every integration and e2e"; \
+		echo "        test SKIPPED. The ok lines above cover unit tests only."; \
+		echo "        For the real thing:  make db-up && make test-integration"; \
+		echo ""; \
+	fi
 
 test-integration: ## Run the full suite incl. integration/e2e (needs TEST_DATABASE_URL)
 	@test -n "$$TEST_DATABASE_URL" || { echo "set TEST_DATABASE_URL, e.g. postgres://beacon:beacon@localhost:5432/beacon_test?sslmode=disable"; exit 1; }

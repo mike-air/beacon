@@ -96,7 +96,19 @@ async function attempt(request: Request, tries: number): Promise<Response> {
 
     const err = await toBeaconError(res);
 
-    if (err.isUnauthenticated) {
+    // A 401 means "your session is gone" only if there WAS a session. Sign-in
+    // and sign-up send no token, so their 401 is an answer — wrong password,
+    // unknown email — and belongs to the form that asked, not to the global
+    // sign-out reflex.
+    //
+    // Without that distinction the two cases are indistinguishable here, and
+    // the wrong one wins: onUnauthenticated does a full document load to
+    // /sign-in, which throws away the form, the error, and any chance the user
+    // had of reading why they were rejected. The page just blinks and empties.
+    // A wrong password becomes unreportable, which is exactly what
+    // "a wrong password is reported, not swallowed" in web/e2e/journey.spec.ts
+    // exists to catch.
+    if (err.isUnauthenticated && token) {
       if (!expiring) {
         expiring = true;
         config.onUnauthenticated?.();

@@ -215,6 +215,75 @@ last twenty merged changes are the style guide; here, the existing operations
 are). One addition in this repository: if your change touches a handler's
 input or output, `make contract` is part of "done".
 
+## Four bugs this codebase actually shipped, and what each one teaches
+
+These are not hypotheticals. Each was live, each was found by using the
+running system rather than by reading it, and each is fixed now — but the
+shape of the mistake is the part worth keeping. All four came from the same
+project-wide event: converting the HTTP layer from chi handlers to huma
+operations. That is the normal way real bugs arrive — not one careless line,
+but one architectural move whose consequences were not chased all the way
+down.
+
+**1. Every single-resource GET and PATCH returned an empty body.**
+`GET /projects/{id}`, `GET /tasks/{id}`, both PATCHes, `get-attachment` — all
+answered `200 OK` with `Content-Length: 0`, while the write itself succeeded.
+The board reported "the server did not accept the move" for moves the server
+had accepted and saved.
+
+The cause is a huma API design that punishes a Go habit. If an output struct
+declares a `Status int` field, huma uses that field's RUNTIME VALUE as the
+response status — unconditionally. `DefaultStatus` on the registration is
+consulted only when the struct has no `Status` field at all. So a handler
+returning `&TaskOutput{Body: t}` gets Go's zero value, `0`, and huma silently
+declines to write a body for a status it cannot make sense of. No panic, no
+log, no failing type check. The `create-*` operations all set `Status`
+explicitly and were fine; the read and update operations did not.
+
+*The lesson: a zero value that is also a valid-looking input is a trap. Go
+gives you `0` for free, and `0` is not a status code.*
+
+**2. A 403 lost its specific error code.** Reading another org's project
+answered `{"code":"forbidden"}` instead of `{"code":"not_member"}`, which the
+client branches on. The huma gates wrote errors with `huma.WriteErr`, which
+can only derive a generic per-status code — it has no way to carry what
+`classify()` already knew. The codebase's own rule is that exactly one place
+maps a domain error to a status; the gates had quietly become a second.
+
+*The lesson: when you port a layer, port its error path too. It is the half
+nobody demos.*
+
+**3. `Idempotency-Key` did nothing at all.** It was documented, in the
+OpenAPI spec, faithfully sent by the generated SDK on every retry — and
+ignored, because the check was still chi middleware inside a nested
+`r.Group` that huma-routed requests never enter. A retried create made a
+second row. This is the *same root cause* the team had already found and
+fixed for auth, org and role; idempotency was simply the one nobody
+re-checked.
+
+*The lesson: when you learn a trap, grep for everything else standing in it.
+Finding it once is luck; finding all of it is method.*
+
+**4. A wrong password was unreportable.** The SDK treats any `401` as "your
+session expired" and does a full document load to `/sign-in`. On the login
+endpoint a 401 means "wrong password" — so the page reloaded, wiping the form
+and the error before it could be read. The fix is one clause: a 401 can only
+mean expiry if the request actually carried a token. Sign-in sends none.
+
+*The lesson: the same status code means different things at different
+endpoints. "Handle 401 globally" is a rule with an exception in it.*
+
+### Why all four survived a green test suite
+
+This is the most useful part. `internal/http`'s integration and e2e tests
+skip themselves unless `TEST_DATABASE_URL` is set — and `go test ./...`
+without it still prints `ok` for every package. A skip that looks like a pass
+is worse than a failure, because it is quieter. Three of these four bugs sat
+behind exactly that.
+
+`make test` now says out loud what it skipped. `make test-integration` is the
+one that actually proves anything. Run that one.
+
 ## Six things in here worth reading closely
 
 Not because they are clever. Because each one is a decision with a reason,

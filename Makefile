@@ -58,13 +58,18 @@ sdk: spec ## Regenerate the TypeScript SDK from the emitted spec
 
 .PHONY: contract
 contract: sdk ## Regenerate the contract and fail if it differs from what is committed
-	@if [ -n "$$(git status --porcelain sdk/ api/openapi.json)" ]; then \
+	@# Only the GENERATED paths are checked. sdk/ also holds hand-written
+	@# behaviour — client.ts, errors.ts, index.ts — which nothing regenerates,
+	@# so watching the whole directory reported an ordinary uncommitted edit to
+	@# client.ts as "the contract drifted". That is a false alarm that teaches
+	@# people to ignore a real one.
+	@if [ -n "$$(git status --porcelain sdk/src/generated api/openapi.json)" ]; then \
 		echo ""; \
 		echo "The generated contract differs from what is committed."; \
 		echo "A handler changed and the SDK was not regenerated. Run:"; \
-		echo "    make sdk && git add sdk api/openapi.json"; \
+		echo "    make sdk && git add sdk/src/generated api/openapi.json"; \
 		echo ""; \
-		git --no-pager diff --stat sdk/ api/openapi.json; \
+		git --no-pager diff --stat sdk/src/generated api/openapi.json; \
 		exit 1; \
 	fi
 	@echo "contract is in step with the handlers"
