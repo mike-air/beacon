@@ -60,6 +60,7 @@ go doc ./internal/search      # the two engines, and the measurement
 | `internal/db` | sqlc-generated queries — **never hand-edited** | 8 |
 | `internal/http` | router, gates, operations, handlers, error envelope | 4, 11–14, 19–20, 28 |
 | `internal/auth` | argon2id hashing, JWT, the typed context keys | 15–17 |
+| `internal/audit` | who deleted what, written in the delete's own transaction | 10 |
 | `internal/orgs` `projects` `tasks` `users` | domain services | 21 |
 | `internal/storage` / `attachments` | presigned S3 (MinIO locally) | 22 |
 | `internal/email` | SMTP sender or log-only sender | 23 |
@@ -202,12 +203,18 @@ inherited codebase — the exact practice the reading-code course ends with:
 
 | Missing | Chapter | Size |
 |---|---|---|
-| Soft deletes (`deleted_at`) and an audit trail | 10 | medium — **start here** |
-| API keys as a second credential type | 18 | small |
+| API keys as a second credential type | 18 | small — **start here** |
 | CSRF protection for cookie-authenticated clients | 20 | small |
-| Production docker-compose and the deploy itself | 42, 44 | medium |
+| Optimistic locking (a `version` column) on tasks | — | small |
 | Cursor pagination to replace offset | 13 | medium |
 | Refresh-token rotation to replace the single access token | 16 | medium |
+| Production docker-compose and the deploy itself | 42, 44 | medium |
+| Undelete, and a purge job for rows past their retention window | 10 | medium |
+
+Chapter 10 — soft deletes and an audit trail — used to head this list and is
+now built; see the house rules below and `internal/audit`. It left two
+follow-ons of its own, both listed above: nothing can be *un*-deleted, and
+nothing ever actually removes a soft-deleted row, so the tables only grow.
 
 Rule from the course: write the failing test first, keep the first change in
 one file, match the conventions you find (chapter 13 of reading-code — the
@@ -334,8 +341,14 @@ and the reason is the part that transfers.
   one-file package). One package comment per package — several is not an
   error, it just makes `go doc` print them in filename order, which buries the
   overview.
-- Soft deletes (`deleted_at`), optimistic locking (`version`), and `org_id`
-  scoping on every tenant-owned table.
+- `org_id` scoping on every tenant-owned table, in the `WHERE` clause of every
+  query.
+- Soft deletes on everything a user can delete — projects, tasks, webhooks.
+  `deleted_at IS NULL` in every read; the delete is an `UPDATE`. Deleting a
+  parent cascades explicitly, in Go, because a soft-deleted row is still
+  there and the `ON DELETE CASCADE` foreign key sees nothing to cascade from.
+- Every delete writes an audit entry in the SAME transaction as the delete.
+  Not best-effort: an audit trail that can silently not exist is not evidence.
 
 ## What has actually been run
 

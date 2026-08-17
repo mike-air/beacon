@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS audit_log;
+ALTER TABLE webhooks DROP COLUMN IF EXISTS deleted_at;
+ALTER TABLE tasks    DROP COLUMN IF EXISTS deleted_at;
+ALTER TABLE projects DROP COLUMN IF EXISTS deleted_at;

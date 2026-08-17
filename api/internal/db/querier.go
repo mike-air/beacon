@@ -34,17 +34,51 @@ type Querier interface {
 	// Organizations + memberships — the multi-tenant core. (Chapter 8 / sqlc)
 	CreateOrg(ctx context.Context, arg CreateOrgParams) (CreateOrgRow, error)
 	// Projects — every query scoped by org_id (the tenant boundary). (Chapter 8 / sqlc)
+	//
+	// Chapter 10: delete is soft. Every read below excludes deleted_at IS NOT
+	// NULL rows; the delete itself is SoftDeleteProject, an UPDATE, not a DELETE.
+	//
+	// deleted_at is selected/returned everywhere below even though every one of
+	// these queries already guarantees it is NULL (that is what "AND deleted_at
+	// IS NULL" means) — leaving it out would make sqlc's column list a strict
+	// subset of the projects table's, which stops it treating the result as a
+	// Project and gives every query its own near-identical Row type instead. The
+	// Go field this produces is real but always nil; internal/projects tags it
+	// `json:"-"` so it never reaches the API despite existing in Go.
 	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
 	// Tasks + comments — every task query scoped by org_id. (Chapter 8 / sqlc)
+	//
+	// Chapter 10: delete is soft. Every task read below excludes deleted_at IS
+	// NOT NULL rows; SoftDeleteTask replaces DeleteTask, and
+	// SoftDeleteTasksByProject is the cascade a project's own soft delete uses —
+	// see internal/projects's Delete for why that cascade has to be explicit now
+	// instead of the ON DELETE CASCADE foreign key it replaces.
+	//
+	// deleted_at is selected/returned everywhere below for the same reason
+	// projects.sql does it — see that file's header — even though every query
+	// here already guarantees it is NULL.
+	//
+	// Comments have no deleted_at of their own (see the migration's header for
+	// why); ListCommentsByTask instead joins tasks and checks it there, which is
+	// also where it now checks org_id — that join closes a latent gap this query
+	// had before Chapter 10 touched it: it filtered by task_id alone, so an org
+	// member who knew another org's task id could read its comments.
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
 	// Users — identity. The one table with no org_id. (Chapter 8 / sqlc)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
 	// Webhooks + deliveries — webhooks scoped by org_id; deliveries by webhook_id.
 	// (Chapter 8 / sqlc)
+	//
+	// Chapter 10: delete is soft. ActiveWebhooksForEvent and GetWebhook both gain
+	// the deleted_at check — the first so a soft-deleted webhook stops receiving
+	// new events, the second so the delivery worker (which loads a webhook by id
+	// alone, unscoped by org, to sign a payload) stops finding one that should no
+	// longer exist.
+	//
+	// deleted_at is selected/returned everywhere below for the same reason
+	// projects.sql does it — see that file's header — even though every query
+	// here already guarantees it is NULL.
 	CreateWebhook(ctx context.Context, arg CreateWebhookParams) (Webhook, error)
-	DeleteProject(ctx context.Context, arg DeleteProjectParams) (int64, error)
-	DeleteTask(ctx context.Context, arg DeleteTaskParams) (int64, error)
-	DeleteWebhook(ctx context.Context, arg DeleteWebhookParams) (int64, error)
 	FindUserIDByEmail(ctx context.Context, lower string) (uuid.UUID, error)
 	GetAttachmentByID(ctx context.Context, arg GetAttachmentByIDParams) (Attachment, error)
 	// Chapter 32 — experiments. The lookup is cached; the assignment insert is the
@@ -71,8 +105,12 @@ type Querier interface {
 	GetWebhook(ctx context.Context, id uuid.UUID) (Webhook, error)
 	GetWebhookByOrg(ctx context.Context, arg GetWebhookByOrgParams) (Webhook, error)
 	InsertAssignmentIfAbsent(ctx context.Context, arg InsertAssignmentIfAbsentParams) error
+	// Audit log — one row per mutation an org needs to be able to answer "who,
+	// and when" about. (Chapter 10 / sqlc)
+	InsertAuditEntry(ctx context.Context, arg InsertAuditEntryParams) error
 	ListAttachmentsByTask(ctx context.Context, arg ListAttachmentsByTaskParams) ([]Attachment, error)
-	ListCommentsByTask(ctx context.Context, taskID uuid.UUID) ([]Comment, error)
+	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
+	ListCommentsByTask(ctx context.Context, arg ListCommentsByTaskParams) ([]Comment, error)
 	ListFeatureFlagOverrides(ctx context.Context, flagName string) ([]FeatureFlagOverride, error)
 	ListFeatureFlags(ctx context.Context) ([]FeatureFlag, error)
 	ListMembers(ctx context.Context, orgID uuid.UUID) ([]ListMembersRow, error)
@@ -102,11 +140,22 @@ type Querier interface {
 	SetExperimentStatus(ctx context.Context, arg SetExperimentStatusParams) error
 	SetFeatureFlagDefault(ctx context.Context, arg SetFeatureFlagDefaultParams) error
 	SetUserPreferences(ctx context.Context, arg SetUserPreferencesParams) error
+	SoftDeleteProject(ctx context.Context, arg SoftDeleteProjectParams) (int64, error)
+	SoftDeleteTask(ctx context.Context, arg SoftDeleteTaskParams) (int64, error)
+	// The cascade a project's soft delete performs explicitly, in the same
+	// transaction, in place of the ON DELETE CASCADE the hard-delete version got
+	// for free from the foreign key.
+	SoftDeleteTasksByProject(ctx context.Context, projectID uuid.UUID) error
+	SoftDeleteWebhook(ctx context.Context, arg SoftDeleteWebhookParams) (int64, error)
 	// The daily cron entry: 24 hours is long enough for any sane retry and short
 	// enough that the table stays small (Chapter 14, the "housekeeping" section).
 	SweepIdempotencyKeys(ctx context.Context) (int64, error)
 	// Attachments — no org_id of their own; scoped by joining through tasks.org_id.
 	// (Chapter 8 / sqlc)
+	//
+	// Chapter 10: attachments get no deleted_at of their own, for the same reason
+	// comments don't (see the migration's header) — their visibility, and now
+	// whether a task can receive a new one, follows tasks.deleted_at instead.
 	TaskInOrg(ctx context.Context, arg TaskInOrgParams) (bool, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error)

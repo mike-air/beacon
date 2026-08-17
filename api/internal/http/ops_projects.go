@@ -20,6 +20,17 @@ import (
 	"beacon/internal/projects"
 )
 
+// FlagNewBoardUI names the flag and the experiment. They share a key on
+// purpose: the flag gates the feature, the experiment measures it, and there
+// is exactly one thing being talked about.
+//
+// Every flag needs an owner and an expiry, or the codebase silts up with dead
+// branches nobody dares delete. Owner: platform. Expiry: delete this flag,
+// and the `if` below that branches on it, once v2 is the only board — list-
+// projects itself does not fork into two handlers the way it did before the
+// huma conversion; one function conditionally adds a field.
+const FlagNewBoardUI = "new_board_ui"
+
 type ListProjectsInput struct {
 	OrgPath
 	Paging
@@ -157,7 +168,8 @@ func (s *Server) registerProjects(api huma.API, g gates) {
 		DefaultStatus: http.StatusNoContent,
 		Middlewares:   g.orgScoped,
 	}, func(ctx context.Context, in *ProjectInput) (*NoContentOutput, error) {
-		if err := s.projects.Delete(ctx, in.OrgID, in.ProjectID); err != nil {
+		userID, _ := auth.UserIDFrom(ctx)
+		if err := s.projects.Delete(ctx, in.OrgID, userID, in.ProjectID); err != nil {
 			return nil, s.asHumaError(ctx, err)
 		}
 		return &NoContentOutput{}, nil

@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddMemberData, AddMemberErrors, AddMemberResponses, CreateAttachmentData, CreateAttachmentErrors, CreateAttachmentResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateOrgData, CreateOrgErrors, CreateOrgResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateTaskData, CreateTaskErrors, CreateTaskResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteTaskData, DeleteTaskErrors, DeleteTaskResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EventsData, EventsErrors, EventsResponses, GetAttachmentData, GetAttachmentErrors, GetAttachmentResponses, GetMeData, GetMeErrors, GetMeResponses, GetPreferencesData, GetPreferencesErrors, GetPreferencesResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetTaskData, GetTaskErrors, GetTaskResponses, ListAttachmentsData, ListAttachmentsErrors, ListAttachmentsResponses, ListCommentsData, ListCommentsErrors, ListCommentsResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListOrgsData, ListOrgsErrors, ListOrgsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListTasksData, ListTasksErrors, ListTasksResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, LoginData, LoginErrors, LoginResponses, RegisterWebhookData, RegisterWebhookErrors, RegisterWebhookResponses, SearchData, SearchErrors, SearchResponses, SetPreferencesData, SetPreferencesErrors, SetPreferencesResponses, SignupData, SignupErrors, SignupResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateTaskData, UpdateTaskErrors, UpdateTaskResponses } from './types.gen';
+import type { AddMemberData, AddMemberErrors, AddMemberResponses, CreateAttachmentData, CreateAttachmentErrors, CreateAttachmentResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateOrgData, CreateOrgErrors, CreateOrgResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateTaskData, CreateTaskErrors, CreateTaskResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteTaskData, DeleteTaskErrors, DeleteTaskResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EventsData, EventsErrors, EventsResponses, GetAttachmentData, GetAttachmentErrors, GetAttachmentResponses, GetMeData, GetMeErrors, GetMeResponses, GetPreferencesData, GetPreferencesErrors, GetPreferencesResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetTaskData, GetTaskErrors, GetTaskResponses, ListAttachmentsData, ListAttachmentsErrors, ListAttachmentsResponses, ListAuditLogData, ListAuditLogErrors, ListAuditLogResponses, ListCommentsData, ListCommentsErrors, ListCommentsResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListOrgsData, ListOrgsErrors, ListOrgsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListTasksData, ListTasksErrors, ListTasksResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, LoginData, LoginErrors, LoginResponses, RegisterWebhookData, RegisterWebhookErrors, RegisterWebhookResponses, SearchData, SearchErrors, SearchResponses, SetPreferencesData, SetPreferencesErrors, SetPreferencesResponses, SignupData, SignupErrors, SignupResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateTaskData, UpdateTaskErrors, UpdateTaskResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -149,6 +149,19 @@ export class Sdk extends HeyApiClient {
                 'Content-Type': 'application/json',
                 ...options.headers
             }
+        });
+    }
+    
+    /**
+     * Who deleted what, newest first
+     *
+     * Owner and admin only. Records every project, task and webhook deletion, written in the same transaction as the delete itself, so an entry cannot be missing for a delete that happened.
+     */
+    public listAuditLog<ThrowOnError extends boolean = false>(options: Options<ListAuditLogData, ThrowOnError>) {
+        return (options.client ?? this.client).get<ListAuditLogResponses, ListAuditLogErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/v1/orgs/{orgID}/audit-log',
+            ...options
         });
     }
     

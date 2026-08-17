@@ -105,6 +105,12 @@ export type ListBodyComment = {
     offset: number;
 };
 
+export type ListBodyLogged = {
+    items: Array<Logged>;
+    limit: number;
+    offset: number;
+};
+
 export type ListBodyMember = {
     items: Array<Member>;
     limit: number;
@@ -137,6 +143,16 @@ export type ListProjectsOutputBody = {
     items: Array<Project>;
     limit: number;
     offset: number;
+};
+
+export type Logged = {
+    action: string;
+    actor_id: string;
+    created_at: string;
+    id: string;
+    org_id: string;
+    resource_id: string;
+    resource_type: string;
 };
 
 export type LoginInputBody = {
@@ -457,6 +473,45 @@ export type CreateOrgResponses = {
 };
 
 export type CreateOrgResponse = CreateOrgResponses[keyof CreateOrgResponses];
+
+export type ListAuditLogData = {
+    body?: never;
+    path: {
+        /**
+         * The organisation
+         */
+        orgID: string;
+    };
+    query?: {
+        /**
+         * How many rows to return
+         */
+        limit?: number;
+        /**
+         * How many rows to skip
+         */
+        offset?: number;
+    };
+    url: '/v1/orgs/{orgID}/audit-log';
+};
+
+export type ListAuditLogErrors = {
+    /**
+     * Error
+     */
+    default: HumaError;
+};
+
+export type ListAuditLogError = ListAuditLogErrors[keyof ListAuditLogErrors];
+
+export type ListAuditLogResponses = {
+    /**
+     * OK
+     */
+    200: ListBodyLogged;
+};
+
+export type ListAuditLogResponse = ListAuditLogResponses[keyof ListAuditLogResponses];
 
 export type EventsData = {
     body?: never;

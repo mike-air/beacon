@@ -20,6 +20,16 @@ type Attachment struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type AuditLog struct {
+	ID           uuid.UUID `json:"id"`
+	OrgID        uuid.UUID `json:"org_id"`
+	ActorID      uuid.UUID `json:"actor_id"`
+	Action       string    `json:"action"`
+	ResourceType string    `json:"resource_type"`
+	ResourceID   uuid.UUID `json:"resource_id"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 type Comment struct {
 	ID        uuid.UUID `json:"id"`
 	TaskID    uuid.UUID `json:"task_id"`
@@ -104,11 +114,12 @@ type Organization struct {
 }
 
 type Project struct {
-	ID        uuid.UUID `json:"id"`
-	OrgID     uuid.UUID `json:"org_id"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uuid.UUID  `json:"id"`
+	OrgID     uuid.UUID  `json:"org_id"`
+	Name      string     `json:"name"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
 }
 
 type SearchIndex struct {
@@ -123,14 +134,15 @@ type SearchIndex struct {
 }
 
 type Task struct {
-	ID        uuid.UUID `json:"id"`
-	OrgID     uuid.UUID `json:"org_id"`
-	ProjectID uuid.UUID `json:"project_id"`
-	Title     string    `json:"title"`
-	Status    string    `json:"status"`
-	Position  float64   `json:"position"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        uuid.UUID  `json:"id"`
+	OrgID     uuid.UUID  `json:"org_id"`
+	ProjectID uuid.UUID  `json:"project_id"`
+	Title     string     `json:"title"`
+	Status    string     `json:"status"`
+	Position  float64    `json:"position"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
 }
 
 type User struct {
@@ -145,13 +157,14 @@ type User struct {
 }
 
 type Webhook struct {
-	ID        uuid.UUID `json:"id"`
-	OrgID     uuid.UUID `json:"org_id"`
-	Url       string    `json:"url"`
-	Secret    string    `json:"secret"`
-	Events    []string  `json:"events"`
-	Active    bool      `json:"active"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        uuid.UUID  `json:"id"`
+	OrgID     uuid.UUID  `json:"org_id"`
+	Url       string     `json:"url"`
+	Secret    string     `json:"secret"`
+	Events    []string   `json:"events"`
+	Active    bool       `json:"active"`
+	CreatedAt time.Time  `json:"created_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
 }
 
 type WebhookDelivery struct {

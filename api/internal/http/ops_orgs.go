@@ -14,7 +14,9 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"beacon/internal/audit"
 	"beacon/internal/auth"
+	"beacon/internal/db"
 	"beacon/internal/jobs"
 	"beacon/internal/orgs"
 	"beacon/internal/search"
@@ -72,6 +74,15 @@ type SearchInput struct {
 
 type SearchOutput struct {
 	Body search.SearchResult
+}
+
+type ListAuditLogInput struct {
+	OrgPath
+	Paging
+}
+
+type ListAuditLogOutput struct {
+	Body ListBody[audit.Logged]
 }
 
 func (s *Server) registerOrgs(api huma.API, g gates) {
@@ -188,6 +199,32 @@ func (s *Server) registerOrgs(api huma.API, g gates) {
 			res.Hits = []search.Hit{}
 		}
 		return &SearchOutput{Body: res}, nil
+	})
+
+	// Ch 10 — the audit trail, read back. orgAdmin rather than orgScoped: the
+	// log names who deleted what, which is a management question, and an
+	// ordinary member has no business enumerating their colleagues' actions.
+	//
+	// Pages in SQL, not in Go: unlike members or an org list, this table only
+	// grows, so page() would mean loading every entry an org has ever
+	// accumulated in order to return twenty of them.
+	huma.Register(api, huma.Operation{
+		OperationID: "list-audit-log",
+		Method:      http.MethodGet,
+		Path:        "/v1/orgs/{orgID}/audit-log",
+		Summary:     "Who deleted what, newest first",
+		Description: "Owner and admin only. Records every project, task and " +
+			"webhook deletion, written in the same transaction as the delete " +
+			"itself, so an entry cannot be missing for a delete that happened.",
+		Tags:        []string{"orgs"},
+		Security:    []map[string][]string{{"bearerAuth": {}}},
+		Middlewares: g.orgAdmin,
+	}, func(ctx context.Context, in *ListAuditLogInput) (*ListAuditLogOutput, error) {
+		entries, err := audit.List(ctx, db.New(s.pool), in.OrgID, in.Limit, in.Offset)
+		if err != nil {
+			return nil, s.asHumaError(ctx, err)
+		}
+		return &ListAuditLogOutput{Body: listBody(entries, in.Limit, in.Offset)}, nil
 	})
 }
 

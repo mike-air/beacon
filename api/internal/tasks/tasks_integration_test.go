@@ -26,6 +26,9 @@ import (
 type tenant struct {
 	orgID     string
 	projectID string
+	// ownerID is the user who created the org. Chapter 10's deletes take an
+	// actor id for the audit entry, so a tenant has to remember who it is.
+	ownerID string
 }
 
 func mkUser(t *testing.T, repo *users.Repo, email string) string {
@@ -49,7 +52,7 @@ func mkTenant(t *testing.T, orgSvc *orgs.Service, projRepo *projects.Repo, users
 	if err != nil {
 		t.Fatalf("Create project for %s: %v", orgName, err)
 	}
-	return tenant{orgID: org.ID, projectID: p.ID}
+	return tenant{orgID: org.ID, projectID: p.ID, ownerID: uid}
 }
 
 func TestTaskCRUD(t *testing.T) {
@@ -59,7 +62,7 @@ func TestTaskCRUD(t *testing.T) {
 	orgSvc := orgs.NewService(orgs.NewRepo(pool), pool)
 	projRepo := projects.NewRepo(pool)
 	usersRepo := users.NewRepo(pool)
-	svc := tasks.NewService(tasks.NewRepo(pool))
+	svc := tasks.NewService(tasks.NewRepo(pool), pool)
 
 	a := mkTenant(t, orgSvc, projRepo, usersRepo, "owner@a.test", "Alpha")
 
@@ -106,7 +109,7 @@ func TestTaskCRUD(t *testing.T) {
 	}
 
 	// Delete + confirm gone.
-	if err := svc.Delete(ctx, a.orgID, tk.ID); err != nil {
+	if err := svc.Delete(ctx, a.orgID, a.ownerID, tk.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 	if _, err := svc.Get(ctx, a.orgID, tk.ID); !errors.Is(err, tasks.ErrNotFound) {
@@ -125,8 +128,8 @@ func TestCrossTenantIsolation(t *testing.T) {
 	orgSvc := orgs.NewService(orgs.NewRepo(pool), pool)
 	projRepo := projects.NewRepo(pool)
 	usersRepo := users.NewRepo(pool)
-	projSvc := projects.NewService(projRepo)
-	taskSvc := tasks.NewService(tasks.NewRepo(pool))
+	projSvc := projects.NewService(projRepo, pool)
+	taskSvc := tasks.NewService(tasks.NewRepo(pool), pool)
 
 	a := mkTenant(t, orgSvc, projRepo, usersRepo, "owner@a.test", "Alpha")
 	b := mkTenant(t, orgSvc, projRepo, usersRepo, "owner@b.test", "Bravo")
@@ -144,7 +147,7 @@ func TestCrossTenantIsolation(t *testing.T) {
 	if _, err := projSvc.Update(ctx, b.orgID, a.projectID, "Hijacked"); !errors.Is(err, projects.ErrNotFound) {
 		t.Errorf("B updating A's project: err = %v, want ErrNotFound", err)
 	}
-	if err := projSvc.Delete(ctx, b.orgID, a.projectID); !errors.Is(err, projects.ErrNotFound) {
+	if err := projSvc.Delete(ctx, b.orgID, b.ownerID, a.projectID); !errors.Is(err, projects.ErrNotFound) {
 		t.Errorf("B deleting A's project: err = %v, want ErrNotFound", err)
 	}
 
@@ -155,7 +158,7 @@ func TestCrossTenantIsolation(t *testing.T) {
 	if _, err := taskSvc.Update(ctx, b.orgID, aTask.ID, "Hijacked", tasks.StatusDone, 9); !errors.Is(err, tasks.ErrNotFound) {
 		t.Errorf("B updating A's task: err = %v, want ErrNotFound", err)
 	}
-	if err := taskSvc.Delete(ctx, b.orgID, aTask.ID); !errors.Is(err, tasks.ErrNotFound) {
+	if err := taskSvc.Delete(ctx, b.orgID, b.ownerID, aTask.ID); !errors.Is(err, tasks.ErrNotFound) {
 		t.Errorf("B deleting A's task: err = %v, want ErrNotFound", err)
 	}
 

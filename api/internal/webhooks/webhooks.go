@@ -12,6 +12,12 @@
 // webhook query is scoped by org_id; deliveries are keyed by webhook_id. The
 // methods call the generated functions and map rows into Webhook / Delivery.
 // UUIDs cross the boundary as text.
+//
+// Course mapping: Chapter 10 — soft deletes and an audit trail. Delete sets
+// deleted_at instead of removing the row, in the same transaction as the
+// audit entry recording who did it. ActiveForEvent and GetWebhook both
+// exclude deleted rows too, so a soft-deleted webhook stops receiving new
+// events and the delivery worker stops finding one that should not exist.
 package webhooks
 
 import (
@@ -28,6 +34,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"beacon/internal/audit"
 	"beacon/internal/db"
 )
 
@@ -53,6 +60,10 @@ type Webhook struct {
 	Events    []string  `json:"events" nullable:"false"`
 	Active    bool      `json:"active"`
 	CreatedAt time.Time `json:"created_at"`
+	// DeletedAt exists so every query's column list matches db.Webhook's
+	// exactly — see internal/db/queries/webhooks.sql's header. Always nil for
+	// anything a caller can reach; json:"-" keeps it out of the API.
+	DeletedAt *time.Time `json:"-"`
 }
 
 // Delivery is one attempt-tracked delivery record (also the dead-letter row
@@ -218,8 +229,10 @@ func (r *Repo) GetByID(ctx context.Context, orgID, id string) (Webhook, error) {
 	return toWebhook(h), nil
 }
 
-// Delete removes a webhook scoped to its org.
-func (r *Repo) Delete(ctx context.Context, orgID, id string) error {
+// softDelete sets deleted_at, scoped by org, using whatever Queries the
+// caller hands in — see projects.Repo.softDelete's comment for why that
+// parameter exists. ErrNotFound if no live row matches.
+func (r *Repo) softDelete(ctx context.Context, q *db.Queries, orgID, id string) error {
 	wid, err := uuid.Parse(id)
 	if err != nil {
 		return ErrNotFound
@@ -228,9 +241,9 @@ func (r *Repo) Delete(ctx context.Context, orgID, id string) error {
 	if err != nil {
 		return ErrNotFound
 	}
-	n, err := r.q.DeleteWebhook(ctx, db.DeleteWebhookParams{ID: wid, OrgID: oid})
+	n, err := q.SoftDeleteWebhook(ctx, db.SoftDeleteWebhookParams{ID: wid, OrgID: oid})
 	if err != nil {
-		return fmt.Errorf("webhooks.Delete: %w", err)
+		return fmt.Errorf("webhooks.softDelete: %w", err)
 	}
 	if n == 0 {
 		return ErrNotFound
@@ -298,9 +311,10 @@ func (r *Repo) GetWebhook(ctx context.Context, id string) (Webhook, error) {
 // Service holds the webhook business rules.
 type Service struct {
 	repo *Repo
+	pool *pgxpool.Pool
 }
 
-func NewService(repo *Repo) *Service { return &Service{repo: repo} }
+func NewService(repo *Repo, pool *pgxpool.Pool) *Service { return &Service{repo: repo, pool: pool} }
 
 // Register creates a new webhook for the org.
 func (s *Service) Register(ctx context.Context, orgID, url string, events []string) (Webhook, error) {
@@ -312,9 +326,32 @@ func (s *Service) List(ctx context.Context, orgID string) ([]Webhook, error) {
 	return s.repo.ListByOrg(ctx, orgID)
 }
 
-// Delete removes a webhook from the org.
-func (s *Service) Delete(ctx context.Context, orgID, id string) error {
-	return s.repo.Delete(ctx, orgID, id)
+// Delete soft-deletes a webhook from the org and records who did it in the
+// same transaction — either both land or neither does. actorID is the
+// caller, for the audit entry.
+func (s *Service) Delete(ctx context.Context, orgID, actorID, id string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("webhooks.Delete: begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after a successful commit
+
+	qtx := s.repo.q.WithTx(tx)
+	if err := s.repo.softDelete(ctx, qtx, orgID, id); err != nil {
+		return err
+	}
+
+	if err := audit.Write(ctx, qtx, audit.Entry{
+		OrgID: orgID, ActorID: actorID,
+		Action: "webhook.deleted", ResourceType: "webhook", ResourceID: id,
+	}); err != nil {
+		return fmt.Errorf("webhooks.Delete: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("webhooks.Delete: commit: %w", err)
+	}
+	return nil
 }
 
 // ActiveForEvent is used by the http orchestration to find which endpoints

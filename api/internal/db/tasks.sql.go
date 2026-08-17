@@ -40,7 +40,7 @@ const createTask = `-- name: CreateTask :one
 
 INSERT INTO tasks (org_id, project_id, title, status, position)
 VALUES ($1, $2, $3, $4, $5)
-RETURNING id, org_id, project_id, title, status, position, created_at, updated_at
+RETURNING id, org_id, project_id, title, status, position, created_at, updated_at, deleted_at
 `
 
 type CreateTaskParams struct {
@@ -52,6 +52,22 @@ type CreateTaskParams struct {
 }
 
 // Tasks + comments — every task query scoped by org_id. (Chapter 8 / sqlc)
+//
+// Chapter 10: delete is soft. Every task read below excludes deleted_at IS
+// NOT NULL rows; SoftDeleteTask replaces DeleteTask, and
+// SoftDeleteTasksByProject is the cascade a project's own soft delete uses —
+// see internal/projects's Delete for why that cascade has to be explicit now
+// instead of the ON DELETE CASCADE foreign key it replaces.
+//
+// deleted_at is selected/returned everywhere below for the same reason
+// projects.sql does it — see that file's header — even though every query
+// here already guarantees it is NULL.
+//
+// Comments have no deleted_at of their own (see the migration's header for
+// why); ListCommentsByTask instead joins tasks and checks it there, which is
+// also where it now checks org_id — that join closes a latent gap this query
+// had before Chapter 10 touched it: it filtered by task_id alone, so an org
+// member who knew another org's task id could read its comments.
 func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error) {
 	row := q.db.QueryRow(ctx, createTask,
 		arg.OrgID,
@@ -70,31 +86,15 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
-const deleteTask = `-- name: DeleteTask :execrows
-DELETE FROM tasks WHERE id = $1 AND org_id = $2
-`
-
-type DeleteTaskParams struct {
-	ID    uuid.UUID `json:"id"`
-	OrgID uuid.UUID `json:"org_id"`
-}
-
-func (q *Queries) DeleteTask(ctx context.Context, arg DeleteTaskParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteTask, arg.ID, arg.OrgID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const getTaskByID = `-- name: GetTaskByID :one
-SELECT id, org_id, project_id, title, status, position, created_at, updated_at
+SELECT id, org_id, project_id, title, status, position, created_at, updated_at, deleted_at
 FROM tasks
-WHERE id = $1 AND org_id = $2
+WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL
 `
 
 type GetTaskByIDParams struct {
@@ -114,19 +114,26 @@ func (q *Queries) GetTaskByID(ctx context.Context, arg GetTaskByIDParams) (Task,
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const listCommentsByTask = `-- name: ListCommentsByTask :many
-SELECT id, task_id, author_id, body, created_at
+SELECT comments.id, comments.task_id, comments.author_id, comments.body, comments.created_at
 FROM comments
-WHERE task_id = $1
-ORDER BY created_at ASC
+JOIN tasks ON tasks.id = comments.task_id
+WHERE comments.task_id = $1 AND tasks.org_id = $2 AND tasks.deleted_at IS NULL
+ORDER BY comments.created_at ASC
 `
 
-func (q *Queries) ListCommentsByTask(ctx context.Context, taskID uuid.UUID) ([]Comment, error) {
-	rows, err := q.db.Query(ctx, listCommentsByTask, taskID)
+type ListCommentsByTaskParams struct {
+	TaskID uuid.UUID `json:"task_id"`
+	OrgID  uuid.UUID `json:"org_id"`
+}
+
+func (q *Queries) ListCommentsByTask(ctx context.Context, arg ListCommentsByTaskParams) ([]Comment, error) {
+	rows, err := q.db.Query(ctx, listCommentsByTask, arg.TaskID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
@@ -152,9 +159,9 @@ func (q *Queries) ListCommentsByTask(ctx context.Context, taskID uuid.UUID) ([]C
 }
 
 const listTasksByProject = `-- name: ListTasksByProject :many
-SELECT id, org_id, project_id, title, status, position, created_at, updated_at
+SELECT id, org_id, project_id, title, status, position, created_at, updated_at, deleted_at
 FROM tasks
-WHERE org_id = $1 AND project_id = $2
+WHERE org_id = $1 AND project_id = $2 AND deleted_at IS NULL
   AND ($5::text IS NULL OR status = $5)
 ORDER BY position ASC, created_at ASC, id ASC
 LIMIT $3 OFFSET $4
@@ -193,6 +200,7 @@ func (q *Queries) ListTasksByProject(ctx context.Context, arg ListTasksByProject
 			&i.Position,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -204,10 +212,41 @@ func (q *Queries) ListTasksByProject(ctx context.Context, arg ListTasksByProject
 	return items, nil
 }
 
+const softDeleteTask = `-- name: SoftDeleteTask :execrows
+UPDATE tasks SET deleted_at = now()
+WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL
+`
+
+type SoftDeleteTaskParams struct {
+	ID    uuid.UUID `json:"id"`
+	OrgID uuid.UUID `json:"org_id"`
+}
+
+func (q *Queries) SoftDeleteTask(ctx context.Context, arg SoftDeleteTaskParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteTask, arg.ID, arg.OrgID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const softDeleteTasksByProject = `-- name: SoftDeleteTasksByProject :exec
+UPDATE tasks SET deleted_at = now()
+WHERE project_id = $1 AND deleted_at IS NULL
+`
+
+// The cascade a project's soft delete performs explicitly, in the same
+// transaction, in place of the ON DELETE CASCADE the hard-delete version got
+// for free from the foreign key.
+func (q *Queries) SoftDeleteTasksByProject(ctx context.Context, projectID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, softDeleteTasksByProject, projectID)
+	return err
+}
+
 const updateTask = `-- name: UpdateTask :one
 UPDATE tasks SET title = $3, status = $4, position = $5, updated_at = now()
-WHERE id = $1 AND org_id = $2
-RETURNING id, org_id, project_id, title, status, position, created_at, updated_at
+WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL
+RETURNING id, org_id, project_id, title, status, position, created_at, updated_at, deleted_at
 `
 
 type UpdateTaskParams struct {
@@ -236,6 +275,7 @@ func (q *Queries) UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, e
 		&i.Position,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }

@@ -12,9 +12,9 @@ import (
 )
 
 const activeWebhooksForEvent = `-- name: ActiveWebhooksForEvent :many
-SELECT id, org_id, url, secret, events, active, created_at
+SELECT id, org_id, url, secret, events, active, created_at, deleted_at
 FROM webhooks
-WHERE org_id = $1 AND active = true
+WHERE org_id = $1 AND active = true AND deleted_at IS NULL
   AND (cardinality(events) = 0 OR $2::text = ANY(events))
 ORDER BY created_at ASC
 `
@@ -41,6 +41,7 @@ func (q *Queries) ActiveWebhooksForEvent(ctx context.Context, arg ActiveWebhooks
 			&i.Events,
 			&i.Active,
 			&i.CreatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -75,7 +76,7 @@ const createWebhook = `-- name: CreateWebhook :one
 
 INSERT INTO webhooks (org_id, url, secret, events)
 VALUES ($1, $2, $3, $4)
-RETURNING id, org_id, url, secret, events, active, created_at
+RETURNING id, org_id, url, secret, events, active, created_at, deleted_at
 `
 
 type CreateWebhookParams struct {
@@ -87,6 +88,16 @@ type CreateWebhookParams struct {
 
 // Webhooks + deliveries — webhooks scoped by org_id; deliveries by webhook_id.
 // (Chapter 8 / sqlc)
+//
+// Chapter 10: delete is soft. ActiveWebhooksForEvent and GetWebhook both gain
+// the deleted_at check — the first so a soft-deleted webhook stops receiving
+// new events, the second so the delivery worker (which loads a webhook by id
+// alone, unscoped by org, to sign a payload) stops finding one that should no
+// longer exist.
+//
+// deleted_at is selected/returned everywhere below for the same reason
+// projects.sql does it — see that file's header — even though every query
+// here already guarantees it is NULL.
 func (q *Queries) CreateWebhook(ctx context.Context, arg CreateWebhookParams) (Webhook, error) {
 	row := q.db.QueryRow(ctx, createWebhook,
 		arg.OrgID,
@@ -103,31 +114,15 @@ func (q *Queries) CreateWebhook(ctx context.Context, arg CreateWebhookParams) (W
 		&i.Events,
 		&i.Active,
 		&i.CreatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
-const deleteWebhook = `-- name: DeleteWebhook :execrows
-DELETE FROM webhooks WHERE id = $1 AND org_id = $2
-`
-
-type DeleteWebhookParams struct {
-	ID    uuid.UUID `json:"id"`
-	OrgID uuid.UUID `json:"org_id"`
-}
-
-func (q *Queries) DeleteWebhook(ctx context.Context, arg DeleteWebhookParams) (int64, error) {
-	result, err := q.db.Exec(ctx, deleteWebhook, arg.ID, arg.OrgID)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
-}
-
 const getWebhook = `-- name: GetWebhook :one
-SELECT id, org_id, url, secret, events, active, created_at
+SELECT id, org_id, url, secret, events, active, created_at, deleted_at
 FROM webhooks
-WHERE id = $1
+WHERE id = $1 AND deleted_at IS NULL
 `
 
 func (q *Queries) GetWebhook(ctx context.Context, id uuid.UUID) (Webhook, error) {
@@ -141,14 +136,15 @@ func (q *Queries) GetWebhook(ctx context.Context, id uuid.UUID) (Webhook, error)
 		&i.Events,
 		&i.Active,
 		&i.CreatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getWebhookByOrg = `-- name: GetWebhookByOrg :one
-SELECT id, org_id, url, secret, events, active, created_at
+SELECT id, org_id, url, secret, events, active, created_at, deleted_at
 FROM webhooks
-WHERE id = $1 AND org_id = $2
+WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL
 `
 
 type GetWebhookByOrgParams struct {
@@ -167,14 +163,15 @@ func (q *Queries) GetWebhookByOrg(ctx context.Context, arg GetWebhookByOrgParams
 		&i.Events,
 		&i.Active,
 		&i.CreatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const listWebhooksByOrg = `-- name: ListWebhooksByOrg :many
-SELECT id, org_id, url, secret, events, active, created_at
+SELECT id, org_id, url, secret, events, active, created_at, deleted_at
 FROM webhooks
-WHERE org_id = $1
+WHERE org_id = $1 AND deleted_at IS NULL
 ORDER BY created_at DESC
 `
 
@@ -195,6 +192,7 @@ func (q *Queries) ListWebhooksByOrg(ctx context.Context, orgID uuid.UUID) ([]Web
 			&i.Events,
 			&i.Active,
 			&i.CreatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -243,4 +241,22 @@ type MarkDeliverySuccessParams struct {
 func (q *Queries) MarkDeliverySuccess(ctx context.Context, arg MarkDeliverySuccessParams) error {
 	_, err := q.db.Exec(ctx, markDeliverySuccess, arg.ID, arg.Attempts)
 	return err
+}
+
+const softDeleteWebhook = `-- name: SoftDeleteWebhook :execrows
+UPDATE webhooks SET deleted_at = now()
+WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL
+`
+
+type SoftDeleteWebhookParams struct {
+	ID    uuid.UUID `json:"id"`
+	OrgID uuid.UUID `json:"org_id"`
+}
+
+func (q *Queries) SoftDeleteWebhook(ctx context.Context, arg SoftDeleteWebhookParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteWebhook, arg.ID, arg.OrgID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

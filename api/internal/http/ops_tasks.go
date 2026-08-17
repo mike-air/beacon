@@ -211,7 +211,8 @@ func (s *Server) registerTasks(api huma.API, g gates) {
 		DefaultStatus: http.StatusNoContent,
 		Middlewares:   g.orgScoped,
 	}, func(ctx context.Context, in *TaskInput) (*NoContentOutput, error) {
-		if err := s.tasks.Delete(ctx, in.OrgID, in.TaskID); err != nil {
+		userID, _ := auth.UserIDFrom(ctx)
+		if err := s.tasks.Delete(ctx, in.OrgID, userID, in.TaskID); err != nil {
 			return nil, s.asHumaError(ctx, err)
 		}
 		s.notifyTaskEvent(ctx, in.OrgID, eventTaskDeleted, map[string]string{"id": in.TaskID})

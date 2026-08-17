@@ -17,6 +17,7 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 
+	"beacon/internal/auth"
 	"beacon/internal/webhooks"
 )
 
@@ -101,7 +102,8 @@ func (s *Server) registerWebhooks(api huma.API, g gates) {
 		DefaultStatus: http.StatusNoContent,
 		Middlewares:   g.orgAdmin,
 	}, func(ctx context.Context, in *DeleteWebhookInput) (*NoContentOutput, error) {
-		if err := s.webhooks.Delete(ctx, in.OrgID, in.WebhookID); err != nil {
+		userID, _ := auth.UserIDFrom(ctx)
+		if err := s.webhooks.Delete(ctx, in.OrgID, userID, in.WebhookID); err != nil {
 			return nil, s.asHumaError(ctx, err)
 		}
 		return &NoContentOutput{}, nil
