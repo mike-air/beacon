@@ -6,133 +6,30 @@
 // The whole design turns on one atomic statement (ClaimIdempotencyKey). See
 // internal/db/queries/idempotency.sql for the xmax trick.
 //
-// [verbatim ch14] with the adaptations this repo's shape forces:
-//   - the chapter's `Idempotency(pool *postgres.Pool)` becomes a method on
-//     *Server, because that is how every other middleware here is written and
-//     it is where the *pgxpool.Pool and the logger already live;
-//   - error responses go through writeError (this repo's one envelope from
-//     Chapter 12) rather than the chapter's writeError(w, r, err) signature.
+// The gate itself — the claim, the four cases, the response capture — lives in
+// humamw.go as humaIdempotency, not here. It used to be here, as chi
+// middleware mounted on a nested r.Group. That was silently wrong the moment
+// every mutating route finished moving to huma: huma registers an operation on
+// the router the API was built with, so a request to it never enters that
+// group, never reaches this file's `next.ServeHTTP`, and Idempotency-Key
+// stopped doing anything — a retried write created a second row instead of
+// replaying the first response, with no error, no log line, nothing to notice
+// short of a duplicate showing up somewhere later. TestE2EIdempotency in
+// e2e_test.go demonstrates it and guards against it recurring.
 //
-// The four cases, the SHA-256 body hash, the responseRecorder, and the SQL are
-// exactly the chapter's.
-
+// What stays here is the two small, transport-agnostic pieces humaIdempotency
+// still uses: the method check and the key-format check are pure functions
+// with nothing huma- or chi-specific about them, and responseRecorder taps
+// http.ResponseWriter, which is what a huma.Context wraps under the specific
+// *http.ResponseWriter/*http.Request pair humachi.Unwrap hands back — huma
+// never replaces that pair, it just wraps it, so a plain http.ResponseWriter
+// recorder still works.
 package http
 
 import (
 	"bytes"
-	"crypto/sha256"
-	"errors"
-	"io"
 	"net/http"
-
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-
-	"beacon/internal/auth"
-	"beacon/internal/db"
 )
-
-// idempotency wraps mutating handlers. Routes that don't mutate
-// (anything not POST/PUT/PATCH/DELETE) are passed through unchanged.
-func (s *Server) idempotency(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !mutates(r.Method) {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		key := r.Header.Get("Idempotency-Key")
-		if key == "" {
-			// Header is optional. Without it, the request runs normally
-			// and the client takes on the duplicate risk themselves.
-			next.ServeHTTP(w, r)
-			return
-		}
-		if !validKey(key) {
-			writeError(w, http.StatusBadRequest, "invalid_idempotency_key",
-				"Idempotency-Key must be 16-128 printable ASCII characters")
-			return
-		}
-
-		userID, ok := auth.UserIDFrom(r.Context())
-		if !ok {
-			// Unauthenticated requests don't get idempotency. The
-			// auth middleware will have rejected them already; this
-			// is a defensive check.
-			next.ServeHTTP(w, r)
-			return
-		}
-		uid, err := uuid.Parse(userID)
-		if err != nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Read the body once into memory so we can hash it AND let the
-		// handler read it. The size cap from Chapter 11 already applies.
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			writeError(w, http.StatusBadRequest, "invalid_request", "could not read request body")
-			return
-		}
-		hash := sha256.Sum256(body)
-
-		// Try to claim the key. The INSERT ... ON CONFLICT decides which
-		// of the four cases we're in.
-		stored, err := db.New(s.pool).ClaimIdempotencyKey(r.Context(), db.ClaimIdempotencyKeyParams{
-			UserID:      uid,
-			Key:         key,
-			RequestHash: hash[:],
-			Method:      r.Method,
-			Path:        r.URL.Path,
-		})
-		if err != nil {
-			s.handleError(w, r, err)
-			return
-		}
-
-		if !stored.Claimed {
-			// Existing row. Three sub-cases.
-			if !bytes.Equal(stored.RequestHash, hash[:]) || stored.Method != r.Method || stored.Path != r.URL.Path {
-				writeError(w, http.StatusUnprocessableEntity, "idempotency_key_reused",
-					"Idempotency-Key reused with a different request")
-				return
-			}
-			if stored.CompletedAt == nil {
-				w.Header().Set("Retry-After", "1")
-				writeError(w, http.StatusConflict, "idempotency_in_flight",
-					"a previous request with this Idempotency-Key is still processing")
-				return
-			}
-			// Replay the stored response.
-			w.Header().Set("Idempotent-Replayed", "true")
-			w.Header().Set("Content-Type", "application/json; charset=utf-8")
-			w.WriteHeader(int(*stored.ResponseStatus))
-			_, _ = w.Write(stored.ResponseBody)
-			return
-		}
-
-		// We claimed the key — run the handler with the buffered body,
-		// capture its response, then store it.
-		r.Body = io.NopCloser(bytes.NewReader(body))
-		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK, buf: &bytes.Buffer{}}
-
-		next.ServeHTTP(rec, r)
-
-		status := int32(rec.status)
-		if err := db.New(s.pool).CompleteIdempotencyKey(r.Context(), db.CompleteIdempotencyKeyParams{
-			UserID:         uid,
-			Key:            key,
-			ResponseStatus: &status,
-			ResponseBody:   rec.buf.Bytes(),
-		}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
-			// Logged but not surfaced — the client already got their
-			// response. The next retry will see "still processing" or
-			// a stale row depending on timing, and recover.
-			s.logger.Error("idempotency complete failed", "err", err, "key", key)
-		}
-	})
-}
 
 // responseRecorder taps the status and the bytes on their way out, so the
 // stored response is byte-for-byte what the client got the first time.
@@ -152,9 +49,12 @@ func (r *responseRecorder) Write(p []byte) (int, error) {
 	return r.ResponseWriter.Write(p)
 }
 
-// Flush keeps the SSE stream (Chapter 25) working under the recorder. Not in
-// the chapter — it does not have to be, because the chapter never wraps a
-// streaming route. [glue, forced by this repo: /events is a flushing handler.]
+// Flush keeps a streaming response working under the recorder, in case a
+// future mutating route ever needs one. Beacon's one stream, /events, is a
+// GET, so mutates() already excludes it and no request reaches this today —
+// kept for the same reason a seatbelt is fastened on a car that has not
+// crashed yet. [glue, not in the course chapter, which never wraps a
+// streaming route.]
 func (r *responseRecorder) Flush() {
 	if f, ok := r.ResponseWriter.(http.Flusher); ok {
 		f.Flush()

@@ -10,11 +10,12 @@ package http
 //
 // The sets are ordered, and the order is load-bearing:
 //
-//	auth      must precede everything, because it supplies the user id
-//	rateLimit must precede real work, so a throttled caller is cheap to refuse
-//	locale    must follow auth, because it reads the user's stored preference
-//	org       must follow auth, because membership is per user
-//	role      must follow org, because a role only exists inside an org
+//	auth       must precede everything, because it supplies the user id
+//	rateLimit  must precede real work, so a throttled caller is cheap to refuse
+//	idempotent must follow auth, because the claim is keyed by user id
+//	locale     must follow auth, because it reads the user's stored preference
+//	org        must follow auth, because membership is per user
+//	role       must follow org, because a role only exists inside an org
 //
 // Getting that order wrong does not fail to compile. It fails at runtime, on
 // the request where a nil user id reaches a query.
@@ -30,7 +31,8 @@ import (
 type gates struct {
 	// public: unauthenticated, IP-limited. Signup and login only.
 	public huma.Middlewares
-	// authed: a valid token, inside the tenant's rate limit, locale resolved.
+	// authed: a valid token, inside the tenant's rate limit, idempotency
+	// checked, locale resolved.
 	authed huma.Middlewares
 	// orgScoped: authed, plus proven membership of {orgID}.
 	orgScoped huma.Middlewares
@@ -42,6 +44,7 @@ func (s *Server) newGates(api huma.API) gates {
 	authed := huma.Middlewares{
 		s.humaRequireAuth(api),
 		s.humaTenantRateLimit(api, s.cfg.TenantRateLimitRPS, s.cfg.TenantRateLimitBurst),
+		s.humaIdempotency(),
 		s.humaLocale(),
 	}
 

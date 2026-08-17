@@ -18,18 +18,29 @@ package http
 // only if you scrolled up far enough to find every enclosing Use().
 //
 // Middleware that needs no path parameter and applies to everything —
-// request id, real IP, logging, metrics, tracing, panic recovery, CORS, and
-// idempotency, which selects itself on method and header — stays as ordinary
-// chi middleware mounted at the root, where it still works untouched.
+// request id, real IP, logging, metrics, tracing, panic recovery, and CORS —
+// stays as ordinary chi middleware mounted at the root, where it still works
+// untouched. Idempotency does not: it used to live there too, on the theory
+// that selecting itself on method and header made it transport-agnostic
+// enough not to need converting. It was mounted inside a nested r.Group,
+// which a huma-routed request never enters, so it silently did nothing for
+// every mutating operation once the conversion finished. humaIdempotency
+// below is the fix — see idempotency.go's header for the full story.
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"errors"
+	"io"
 	"net"
 	"net/http"
 	"strconv"
 	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
+	"github.com/danielgtaylor/huma/v2/adapters/humachi"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/time/rate"
 
 	"beacon/internal/auth"
@@ -149,6 +160,136 @@ func (s *Server) humaIPRateLimit(api huma.API, rps float64, burst int) gate {
 			return
 		}
 		next(ctx)
+	}
+}
+
+// humaIdempotency is Chapter 14, ported. A client that sends
+// Idempotency-Key on a mutating request gets a promise: this runs at most
+// once. Retry it after a timeout, a dropped connection, a train going into a
+// tunnel — the server replays the original response instead of performing
+// the write twice. The claim, the four cases and the SQL (the xmax trick —
+// see internal/db/queries/idempotency.sql) are identical to the chi version
+// this replaced; see idempotency.go's header for why it had to move.
+//
+// The one real difference is mechanical. A chi http.Handler owns its
+// http.ResponseWriter/*http.Request outright, so buffering the request body
+// and swapping in a response-capturing writer are a field assignment and a
+// wrapped ServeHTTP call. A gate only has a huma.Context, which is an
+// interface over whatever adapter huma was built with — here, humachi. Two
+// of its functions are the bridge: Unwrap gets the raw pair back out so the
+// body can be replaced the same way, and NewContext builds a fresh
+// huma.Context around a substitute ResponseWriter so `next` — huma's own
+// request decoding AND the operation handler, both of which still run
+// inside it — writes through the recorder without either one knowing it is
+// there.
+func (s *Server) humaIdempotency() gate {
+	return func(ctx huma.Context, next func(huma.Context)) {
+		if !mutates(ctx.Method()) {
+			next(ctx)
+			return
+		}
+
+		key := ctx.Header("Idempotency-Key")
+		if key == "" {
+			// Header is optional. Without it, the request runs normally and
+			// the client takes on the duplicate risk themselves.
+			next(ctx)
+			return
+		}
+		if !validKey(key) {
+			writeHumaError(ctx, &humaError{status: http.StatusBadRequest, Body: errorBody{
+				Code:    "invalid_idempotency_key",
+				Message: "Idempotency-Key must be 16-128 printable ASCII characters",
+			}})
+			return
+		}
+
+		userID, ok := auth.UserIDFrom(ctx.Context())
+		if !ok {
+			// Unauthenticated requests don't get idempotency. humaRequireAuth
+			// will have rejected them already; this is a defensive check.
+			next(ctx)
+			return
+		}
+		uid, err := uuid.Parse(userID)
+		if err != nil {
+			next(ctx)
+			return
+		}
+
+		r, w := humachi.Unwrap(ctx)
+
+		// Read the body once so it can be hashed AND read again by huma's own
+		// decoding and the handler. The size cap from Chapter 11 already
+		// applies before this gate ever sees the request.
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			writeHumaError(ctx, &humaError{status: http.StatusBadRequest, Body: errorBody{
+				Code: "invalid_request", Message: "could not read request body",
+			}})
+			return
+		}
+		hash := sha256.Sum256(body)
+
+		// Try to claim the key. The INSERT ... ON CONFLICT decides which of
+		// the four cases this is.
+		stored, err := db.New(s.pool).ClaimIdempotencyKey(ctx.Context(), db.ClaimIdempotencyKeyParams{
+			UserID:      uid,
+			Key:         key,
+			RequestHash: hash[:],
+			Method:      r.Method,
+			Path:        r.URL.Path,
+		})
+		if err != nil {
+			writeHumaError(ctx, s.asHumaError(ctx.Context(), err))
+			return
+		}
+
+		if !stored.Claimed {
+			// Existing row. Three sub-cases.
+			if !bytes.Equal(stored.RequestHash, hash[:]) || stored.Method != r.Method || stored.Path != r.URL.Path {
+				writeHumaError(ctx, &humaError{status: http.StatusUnprocessableEntity, Body: errorBody{
+					Code: "idempotency_key_reused", Message: "Idempotency-Key reused with a different request",
+				}})
+				return
+			}
+			if stored.CompletedAt == nil {
+				ctx.SetHeader("Retry-After", "1")
+				writeHumaError(ctx, &humaError{status: http.StatusConflict, Body: errorBody{
+					Code:    "idempotency_in_flight",
+					Message: "a previous request with this Idempotency-Key is still processing",
+				}})
+				return
+			}
+			// Replay the stored response, byte for byte.
+			ctx.SetHeader("Idempotent-Replayed", "true")
+			ctx.SetHeader("Content-Type", "application/json; charset=utf-8")
+			ctx.SetStatus(int(*stored.ResponseStatus))
+			_, _ = ctx.BodyWriter().Write(stored.ResponseBody)
+			return
+		}
+
+		// We claimed the key. Put the buffered body back — huma's request
+		// decoding reads r.Body next, inside next(ctx), and has to see the
+		// same bytes that were just hashed — then run the rest of the chain
+		// through a context built around a recorder, so whatever huma or the
+		// handler writes is captured on its way out.
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		rec := &responseRecorder{ResponseWriter: w, status: http.StatusOK, buf: &bytes.Buffer{}}
+		next(humachi.NewContext(ctx.Operation(), r, rec))
+
+		status := int32(rec.status)
+		if err := db.New(s.pool).CompleteIdempotencyKey(ctx.Context(), db.CompleteIdempotencyKeyParams{
+			UserID:         uid,
+			Key:            key,
+			ResponseStatus: &status,
+			ResponseBody:   rec.buf.Bytes(),
+		}); err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			// Logged but not surfaced — the client already got their
+			// response. The next retry will see "still processing" or a
+			// stale row depending on timing, and recover.
+			s.logger.Error("idempotency complete failed", "err", err, "key", key)
+		}
 	}
 }
 

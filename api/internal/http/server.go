@@ -276,14 +276,18 @@ func (s *Server) Routes() http.Handler {
 		// signup and login are registered through huma (ops_auth.go), with
 		// the IP limiter as their gate rather than as chi middleware.
 
-		// Authenticated endpoints.
+		// Authenticated endpoints. What is left registered here is exactly one
+		// route: the SSE stream below, which cannot be a huma operation (see
+		// documentEventStream) and so is the one place this chi group still
+		// does real work. Ch 14's idempotency middleware used to sit in this
+		// group too; it is not here any more — see idempotency.go's header
+		// for why an at-most-once check has no business living somewhere a
+		// mutating request can route around it, which every mutating request
+		// now does.
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)
 			// Ch 19 — one bucket per org, the unit customers pay for.
 			r.Use(tenantRateLimit(s.cfg.TenantRateLimitRPS, s.cfg.TenantRateLimitBurst))
-			// Ch 14 — at-most-once for mutating requests carrying an
-			// Idempotency-Key. Non-mutating methods pass straight through.
-			r.Use(s.idempotency)
 			// Ch 33 — resolve the locale once, per request, for every handler.
 			r.Use(s.localeMiddleware)
 
