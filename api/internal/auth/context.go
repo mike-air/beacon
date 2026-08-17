@@ -4,6 +4,7 @@
 //
 // Course mapping: Chapter 16 — user context; Chapter 17 — the per-membership
 // role that RBAC checks against.
+
 package auth
 
 import "context"

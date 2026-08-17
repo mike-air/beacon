@@ -96,6 +96,52 @@ describe("needsRebalance", () => {
     },
   );
 
+  /**
+   * The header comment in position.ts quotes exact insert counts. A comment
+   * with numbers in it rots silently, so the numbers are pinned here: if the
+   * threshold or GAP changes, this fails and the comment gets updated with it.
+   */
+  it.each([
+    { base: 1e3, warnsAfter: 40, collidesAfter: 53 },
+    { base: 1e6, warnsAfter: 31, collidesAfter: 43 },
+    { base: 1e9, warnsAfter: 21, collidesAfter: 33 },
+    { base: 1e12, warnsAfter: 11, collidesAfter: 23 },
+  ])("warns after $warnsAfter and collides after $collidesAfter at $base", (c) => {
+    let lo = c.base;
+    let hi = c.base + GAP;
+    let warned = 0;
+    while (!needsRebalance([lo, hi])) {
+      hi = lo + (hi - lo) / 2;
+      warned += 1;
+    }
+    expect(warned).toBe(c.warnsAfter);
+
+    // Keep halving past the warning to find where float64 actually gives up.
+    let l = c.base;
+    let h = c.base + GAP;
+    let collided = 0;
+    for (;;) {
+      const mid = l + (h - l) / 2;
+      if (mid <= l || mid >= h) break;
+      h = mid;
+      collided += 1;
+    }
+    expect(collided).toBe(c.collidesAfter);
+  });
+
+  /** Prepending is the operation that really is unreachable. */
+  it("survives 1,084 prepends before halving toward zero bottoms out", () => {
+    let column = [GAP];
+    let n = 0;
+    for (;;) {
+      const next = positionAtStart(column);
+      if (next === 0 || next === column[0]) break;
+      column = [next];
+      n += 1;
+    }
+    expect(n).toBe(1084);
+  });
+
   it("does not fire on positions produced by ordinary use", () => {
     // 200 appends, then an insert between each neighbouring pair.
     let column = Array.from({ length: 200 }, (_, i) => (i + 1) * GAP);

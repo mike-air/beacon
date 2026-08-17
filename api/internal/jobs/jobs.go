@@ -1,17 +1,9 @@
-// Package jobs is Beacon's background-job queue: enqueue slow work now, run it
-// later, retry on failure. It is the queue boundary that Chapters 23–24 push
-// email and webhook delivery across.
+// The queue itself: Enqueue, the claim query, backoff and retry, and the worker
+// loop that polls. The package overview — including why this is a hand-rolled
+// Postgres queue and not River — is in doc.go.
 //
-// Course mapping: Chapter 26 — background jobs. The course uses River, a
-// Postgres-backed queue. DEVIATION (chosen, noted per the build spec): we do
-// NOT use River. River's recent releases need Go 1.24+, and even the older
-// go-1.22 line (v0.14.x) drags in a large dependency tree (riverpgxv5, an
-// internal sqlc-generated layer, a migration framework) that fights this
-// project's "hand-written pgx, no sqlc, toolchain-free" ethos and the `go 1.23`
-// / go1.23.4 pin. So we implement the small Postgres-backed queue the spec
-// offers as the fallback — a `jobs` table polled with FOR UPDATE SKIP LOCKED,
-// which is exactly the mechanism Chapter 26 says River uses internally. Same
-// shape (Enqueue + a handler registry + a polling worker), far fewer deps.
+// Course mapping: Chapter 26 — background jobs.
+
 package jobs
 
 import (

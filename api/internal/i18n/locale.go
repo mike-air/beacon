@@ -1,12 +1,11 @@
-// Package i18n is Chapter 33: making the same data readable to someone who is
-// not you. Three separate problems live here, and only the first is about
-// language.
+// The language cascade, and the only part of this package the HTTP layer calls
+// on every request. Both transports go through one implementation
+// (LocaleFromHeader) on purpose: two copies of a cascade eventually disagree
+// about what language a reader gets, and nobody notices until a customer says
+// so.
 //
-//  1. Which language? A four-source cascade, most specific first.
-//  2. How much money? Never a float. Minor units and a currency, together.
-//  3. What time? UTC in the database, the user's zone at the last moment.
-//
-// [verbatim ch33]
+// [verbatim ch33] The three problems this package solves are set out in doc.go.
+
 package i18n
 
 import (

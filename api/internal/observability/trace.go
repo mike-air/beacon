@@ -9,6 +9,7 @@
 // exact log lines for that request in one click. The flame graph is a bonus.
 //
 // [verbatim ch36] with a nil-safe Shutdown so main can defer it unconditionally.
+
 package observability
 
 import (

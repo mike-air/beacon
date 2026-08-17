@@ -1,4 +1,4 @@
-.PHONY: help db-up db-down run worker build tidy vet test test-integration cover docker-build fmt
+.PHONY: help db-up db-down run worker build tidy vet test test-integration cover docker-build fmt sqlc spec
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-12s %s\n", $$1, $$2}'
@@ -41,6 +41,9 @@ cover: ## Run tests with a coverage profile and print the summary
 
 docker-build: ## Build the production container image
 	docker build -t beacon-api:local .
+
+sqlc: ## Regenerate internal/db from migrations/ + internal/db/queries/*.sql
+	sqlc generate
 
 spec: ## Emit openapi.json from the registered huma operations
 	go run ./cmd/beacon-spec openapi.json

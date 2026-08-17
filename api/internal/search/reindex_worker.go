@@ -8,6 +8,7 @@
 // structs (Kind() string, InsertOpts()). This repo runs its own Postgres-backed
 // queue (see internal/jobs and its DEVIATION note from Chapter 26), so the
 // same two jobs are expressed as this queue's kind + JSON payload + handler.
+
 package search
 
 import (

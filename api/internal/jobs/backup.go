@@ -22,6 +22,7 @@
 // River worker (river.WorkerDefaults + a Kind() method) becomes this queue's
 // handler signature. The pipeline, the encryption and the S3 upload are
 // unchanged.
+
 package jobs
 
 import (

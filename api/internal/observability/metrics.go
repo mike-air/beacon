@@ -10,6 +10,7 @@
 // know about one customer, you count; you do not label.
 //
 // [verbatim ch35]
+
 package observability
 
 import (

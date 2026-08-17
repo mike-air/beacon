@@ -1,8 +1,8 @@
-// Package observability holds logging, and later metrics and tracing, in one
-// place. For now it builds the application's structured logger.
+// The application's structured logger, built first because every other package
+// wants one from day one. The package overview is in doc.go.
 //
-// Course mapping: Chapter 34 — Structured logging with slog (started early
-// because every other package wants a logger from day one).
+// Course mapping: Chapter 34 — structured logging with slog.
+
 package observability
 
 import (

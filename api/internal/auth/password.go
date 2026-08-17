@@ -1,15 +1,11 @@
-// Package auth owns credentials: argon2id password hashing, JWT issue/verify,
-// and the typed context keys that carry the authenticated user and their org
-// role through a request. Domain packages and the HTTP layer both lean on it,
-// but it imports neither — it is a leaf.
+// Password hashing with argon2id: a memory-hard KDF, so an attacker with a
+// stolen table cannot trade cheap parallel hardware for speed the way they can
+// against a plain hash. The encoded string carries its own parameters, so a
+// future parameter change can verify old hashes and upgrade them on login.
 //
-// Course mapping: Chapter 15 — password hashing (this file); Chapter 16 — JWT
-// (token.go); Chapter 17 — RBAC role context (context.go).
-//
-// NOTE: The course stores password parameters in Config and supports lazy
-// rehash-on-login. We keep a single fixed OWASP-recommended parameter set here
-// to stay simple; the encoded hash still records its own params, so a future
-// pass can add rotation without breaking stored hashes.
+// Course mapping: Chapter 15 — password hashing. The package overview, and the
+// note on why the parameters are fixed rather than configurable, are in doc.go.
+
 package auth
 
 import (

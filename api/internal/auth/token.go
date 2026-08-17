@@ -6,6 +6,7 @@
 // Course mapping: Chapter 16 — JWT access tokens. The course also builds
 // database-backed refresh-token rotation; we keep a single access token here
 // (IssueToken/ParseToken) to stay simple and toolchain-free.
+
 package auth
 
 import (

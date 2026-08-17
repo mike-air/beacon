@@ -13,6 +13,7 @@
 // [verbatim ch28 for setCacheHeaders; withETag is described in the chapter as a
 // middleware over a setETag(ctx, ...) handler contract, and this is that
 // contract written out.]
+
 package http
 
 import (

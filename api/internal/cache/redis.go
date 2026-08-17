@@ -6,6 +6,7 @@
 // [verbatim ch28] plus a New() that tolerates an empty URL, because this repo's
 // services all degrade cleanly when their dependency is unconfigured (the same
 // pattern storage and email already use).
+
 package cache
 
 import (

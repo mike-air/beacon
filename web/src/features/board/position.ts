@@ -5,10 +5,20 @@
  * rewriting the rest of the column. The whole scheme rests on one fact: there
  * is always a number between any two distinct floats — until there is not.
  *
- * Halving the gap every time means 1,084 insertions into the SAME slot before
- * two positions are genuinely indistinguishable in float64. `needsRebalance`
- * exists to warn well before that. Beacon has no bulk-reorder endpoint yet
- * (see DEVIATIONS.md), so today it is a warning rather than a repair.
+ * Two different operations run out of room at very different rates, and it is
+ * worth knowing which is which:
+ *
+ *   prepending          halves toward zero, so it survives ~1,084 repeats
+ *                       before reaching the smallest denormal — unreachable
+ *   inserting between   halves a fixed gap, so it survives only ~53 repeats
+ *   two neighbours      at position 1e3, and ~23 at 1e12
+ *
+ * The second number is the one that matters. Fifty-three drops into the same
+ * slot is something a determined user can do in an afternoon, and it gets
+ * worse as positions grow. `needsRebalance` warns first: 40 inserts at 1e3
+ * and 11 at 1e12, in both cases with thousands of representable doubles still
+ * in hand. Beacon has no bulk-reorder endpoint yet (see DEVIATIONS.md), so
+ * today it is a warning rather than a repair.
  *
  * The threshold is RELATIVE, not absolute, and that matters more than it
  * looks. An absolute floor measures the wrong thing, because the spacing
@@ -18,11 +28,13 @@
  *   position 1e9   one ULP is 1.2e-07
  *   position 1e12  one ULP is 1.2e-04
  *
- * A fixed 1e-6 floor is 8.8e15 ULPs of headroom near 1e3 — it would warn
- * about a thousand inserts too early — and SMALLER than one ULP by 1e12,
- * where two positions collide before the check could ever fire. One constant
- * cannot be both. Scaling by the magnitude gives ~7,500 ULPs of headroom at
- * every size, which is the property actually wanted.
+ * A fixed 1e-6 floor is 8.8e15 ULPs of headroom near 1e3, so it fires after
+ * 30 inserts when the real limit is 53 — and it is SMALLER than one ULP by
+ * 1e12, where two positions collide before the check could ever fire. One
+ * constant cannot be both. Scaling by the magnitude leaves between 4,096 and
+ * 8,000 representable doubles in hand at every size — the spread is just
+ * where a position happens to fall inside its binade — which is the property
+ * actually wanted.
  */
 
 /** The gap between freshly-appended cards. Wide, so there is room to insert. */

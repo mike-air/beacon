@@ -1,38 +1,9 @@
-// Package search is Chapters 29 and 30, in that order and for that reason.
+// The service: the Postgres full-text query, the Meilisearch query, and the
+// fallback between them. Everything a handler touches is here.
 //
-// Chapter 29: Postgres already has a search engine. A tsvector column, a GIN
-// index, and the @@ operator give you stemming, stopwords, ranking, and
-// tenant-scoped results with no new service to run, no second datastore to
-// keep in sync, and no 3am page from a machine you forgot you owned.
-//
-// Chapter 30: you graduate to a real engine when a customer names a case
-// Postgres can't do — typo tolerance, per-document language, faceted filters —
-// and not one day earlier. When you do, the rule that keeps you sane is:
-// Postgres stays authoritative. Data flows Postgres → Meili, one direction,
-// and if Meili is down or wrong, the fallback is the Chapter 29 path, so users
-// see different ranking rather than zero results.
-//
-// A finding from actually running both engines against the same data, which is
-// worth having before you decide the graduation is free: the two are not
-// ordered, they trade.
-//
-//	query "verifying", document "Verify the whole thing"
-//	  Postgres  1 hit   — it stems, so verifying and verify are one word
-//	  Meili     0 hits  — it does not stem; it tolerates typos instead
-//
-//	query "authentcation", document "Authentication Rewrite"
-//	  Postgres  0 hits  — a misspelling is simply a different lexeme
-//	  Meili     1 hit   — one typo at 8+ characters is within tolerance
-//
-// So switching Meili on does not strictly improve search; it changes which
-// queries work. The fallback in Search() hides that: the same user typing the
-// same word gets a different answer depending on whether Meili is up. Know
-// that before you turn it on, and prefer to turn it on because a customer named
-// the case, not because a search engine sounds more serious than a database.
-//
-// [verbatim ch29 + ch30 for the service shape, Search, searchMeili, IndexOne
-// and the fallback; the constructors and the pgx plumbing are the glue the
-// chapters imply.]
+// [verbatim ch29 + ch30] The argument for the two engines, and the measurement
+// showing they trade rather than rank, are in doc.go.
+
 package search
 
 import (

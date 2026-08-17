@@ -10,6 +10,7 @@
 // points at. The chapter's phrase for it is worth keeping: "a separate internal
 // port". Defence in depth on top of that: pprof additionally requires a token
 // unless the caller is on loopback.
+
 package http
 
 import (

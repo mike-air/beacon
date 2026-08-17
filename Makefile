@@ -44,6 +44,10 @@ dev: ## Print how to run both halves (they need two terminals)
 # that document. Neither is hand-written, so neither can drift from the server.
 # ---------------------------------------------------------------------------
 
+.PHONY: sqlc
+sqlc: ## Regenerate internal/db from the migrations and the query files
+	$(MAKE) -C api sqlc
+
 .PHONY: spec
 spec: ## Emit openapi.json from the Go handlers
 	$(MAKE) -C api spec

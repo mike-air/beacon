@@ -1,9 +1,10 @@
-// Package http owns the web layer: the router, the middleware chain, and one
-// file per group of routes. Domain packages (orgs, tasks, …) never import this
-// package — the dependency only points one way.
+// The router itself: the chi mux, the process-wide middleware chain, and the
+// boot wiring that hands every dependency to the handlers. The package
+// overview is in doc.go.
 //
 // Course mapping: Chapter 4 — the HTTP server; Chapter 20 — CORS; and the
 // middleware chain that grows through Part II.
+
 package http
 
 import (

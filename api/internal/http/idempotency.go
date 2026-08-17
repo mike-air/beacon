@@ -15,6 +15,7 @@
 //
 // The four cases, the SHA-256 body hash, the responseRecorder, and the SQL are
 // exactly the chapter's.
+
 package http
 
 import (

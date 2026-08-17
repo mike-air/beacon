@@ -1,9 +1,11 @@
-// Chapter 30 — the Meilisearch client.
+// Package meili is the Meilisearch client — Chapter 30.
 //
 // Everything here is configuration and one-way writes. The index settings are
 // applied once at startup and are idempotent, so a redeploy is safe. There is
-// no code path from a handler into this package: documents arrive only from the
-// reindex worker, which read them from Postgres first.
+// no code path from a handler into this package: documents arrive only from
+// the reindex worker, which read them out of Postgres first. That direction is
+// the whole discipline — Postgres is authoritative, Meili is a derived index,
+// and an index you can rebuild from the source of truth is never an outage.
 //
 // [verbatim ch30] for New and EnsureIndex; Upsert, DeleteOne, Search and the
 // Request/Response mapping are the glue the chapter's service calls imply.

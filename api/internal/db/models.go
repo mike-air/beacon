@@ -74,15 +74,16 @@ type IdempotencyKey struct {
 }
 
 type Job struct {
-	ID          uuid.UUID `json:"id"`
-	Kind        string    `json:"kind"`
-	Payload     []byte    `json:"payload"`
-	RunAt       time.Time `json:"run_at"`
-	Attempts    int32     `json:"attempts"`
-	MaxAttempts int32     `json:"max_attempts"`
-	Status      string    `json:"status"`
-	LastError   string    `json:"last_error"`
-	CreatedAt   time.Time `json:"created_at"`
+	ID           uuid.UUID `json:"id"`
+	Kind         string    `json:"kind"`
+	Payload      []byte    `json:"payload"`
+	RunAt        time.Time `json:"run_at"`
+	Attempts     int32     `json:"attempts"`
+	MaxAttempts  int32     `json:"max_attempts"`
+	Status       string    `json:"status"`
+	LastError    string    `json:"last_error"`
+	CreatedAt    time.Time `json:"created_at"`
+	TraceContext []byte    `json:"trace_context"`
 }
 
 type Membership struct {

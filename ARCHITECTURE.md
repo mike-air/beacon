@@ -115,6 +115,11 @@ a silent fallback is a silent incident.
 |---|---|
 | Understand the server | `api/READING.md` |
 | Understand the client | `web/READING.md` |
-| Know what is deliberately missing | `web/DEVIATIONS.md` |
+| Understand one Go package | `go doc ./internal/<name>` — every package has an overview |
+| Know what is deliberately missing | `api/READING.md`'s work-list, `web/DEVIATIONS.md` |
 | Run something | `make help` |
 | Know why a decision was made | the comment above it — they are load-bearing here |
+
+Both READING files are guided tours in the same shape: questions that orient
+you, then traces you run yourself. They are meant to be read at a keyboard
+with the stack running, not on a train.

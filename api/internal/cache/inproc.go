@@ -1,16 +1,11 @@
-// Package cache is Chapter 28's read path: five layers, fastest first, each one
-// quicker but holding less. A read walks left to right and stops at the first
-// hit; a write has to reach back and invalidate every layer it passed.
+// Layer three: a fixed-size TTL-LRU living inside one process. Reading it is a
+// map lookup and a pointer dereference — no serialisation, no network — and
+// everything in it is gone when the process restarts, which is the correct
+// behaviour for a cache and a disaster for anything else.
 //
-//	browser → CDN → in-process LRU → Redis → Postgres
-//
-// This file is the third layer. It is a fixed-size map living inside one
-// process: nanoseconds to read, nothing to serialise, and gone when the process
-// restarts. Use it for values that are tiny, very hot, and tolerant of being a
-// few seconds stale — feature flags, org config. Never for anything a user
-// would notice going backwards.
-//
-// [verbatim ch28]
+// [verbatim ch28] The layer diagram and the rule for what may live here are in
+// doc.go.
+
 package cache
 
 import (

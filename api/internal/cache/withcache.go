@@ -10,6 +10,7 @@
 //
 // [verbatim ch28] with the constructor and the Del filled in — the chapter
 // shows the struct and Get and leaves the wiring implied.
+
 package cache
 
 import (

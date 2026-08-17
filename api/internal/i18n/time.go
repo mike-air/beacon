@@ -1,16 +1,8 @@
-// Chapter 33 — time and money, the two things that look easy and are not.
+// Time formatting in the user's zone, and money as minor units plus a currency.
 //
-// TIME: store UTC, always. timestamptz in the database, time.Now().UTC() in
-// Go, and convert to the user's zone at the very last moment before a human
-// reads it. The rule the chapter is emphatic about: never store a local time
-// and its zone in separate columns. "02:30 on the spring-forward day in Berlin"
-// is not a moment that happened, and no amount of care downstream recovers it.
-//
-// MONEY: never float64. 0.1 + 0.2 is 0.30000000000000004, and that error
-// compounds across a million rows. Store an integer count of minor units plus a
-// currency, and let a library that knows currencies do the arithmetic.
-//
-// [verbatim ch33]
+// [verbatim ch33] The two rules these functions exist to enforce — UTC in the
+// database, and never a float for money — are argued in doc.go.
+
 package i18n
 
 import (

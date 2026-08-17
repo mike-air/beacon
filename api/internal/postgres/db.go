@@ -1,9 +1,8 @@
-// Package database owns the connection to Postgres. The rest of the app is
-// handed a *pgxpool.Pool — a set of reusable connections shared across
-// requests, instead of one connection opened per request (the bug from
-// Chapter 1's Friday-night story).
+// The pool: construction, sizing and health check. The package overview is in
+// doc.go.
 //
 // Course mapping: Chapter 5 — Postgres with pgx and a connection pool.
+
 package postgres
 
 import (

@@ -1,11 +1,9 @@
-// Chapter 33 — the message catalog.
+// The message catalog: a map per locale, looked up by the English source
+// string, falling back to that same string when a translation is missing.
 //
-// The trick worth noticing: the English source string is BOTH the catalog key
-// and the fallback. Nothing is ever rendered as `errors.welcome_message` or a
-// blank space — a string nobody has translated yet comes out in English, which
-// is a perfectly readable answer.
-//
-// [verbatim ch33]
+// [verbatim ch33] Why the key is the English text, and not an identifier, is in
+// doc.go — it is the reason a missing translation is never an incident.
+
 package i18n
 
 import (
