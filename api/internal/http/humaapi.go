@@ -19,6 +19,7 @@ package http
 //      object in the client, so it is turned off.
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/danielgtaylor/huma/v2"
@@ -119,6 +120,34 @@ func codeForStatus(status int) string {
 		}
 		return "error"
 	}
+}
+
+// writeHumaError writes an already-classified error (from asHumaError)
+// straight onto the response, for the one place that needs it: gates, which
+// run before an operation and so cannot return (Output, error) the way a
+// handler does — huma.WriteErr is not an option for them.
+//
+// This exists because huma.WriteErr cannot carry a domain-specific code.
+// It funnels through huma.NewError (= newErrorEnvelope above), which only
+// ever has a status and a message to work with, so codeForStatus's generic
+// per-status default is all it can produce. That is wrong whenever classify()
+// has a more specific answer — "you are not a member of this organization"
+// must read code: "not_member", not the generic "forbidden" every other 403
+// gets, because the web client's toast text branches on exactly that string.
+// A gate that wants classify()'s answer has to write the body itself.
+func writeHumaError(ctx huma.Context, err error) {
+	he, ok := err.(*humaError)
+	if !ok {
+		// Should not happen — asHumaError always returns *humaError — but a
+		// 500 is the correct fallback for an error this function does not
+		// recognise. See classify()'s own default arm for the same reasoning.
+		he = &humaError{status: http.StatusInternalServerError, Body: errorBody{
+			Code: "internal_error", Message: "something went wrong on our end",
+		}}
+	}
+	ctx.SetHeader("Content-Type", "application/json")
+	ctx.SetStatus(he.status)
+	_ = json.NewEncoder(ctx.BodyWriter()).Encode(he)
 }
 
 // newHumaAPI wraps an existing chi router. chi stays the router: every

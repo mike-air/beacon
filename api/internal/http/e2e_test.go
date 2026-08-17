@@ -191,6 +191,82 @@ func TestE2EFullFlow(t *testing.T) {
 	}
 }
 
+// TestE2ESingleResourceBodies guards against the exact bug that shipped:
+// get-project, update-project, get-task and update-task all answered
+// 200 with a completely EMPTY body — Content-Length: 0 — while the write
+// itself succeeded. A client reading that as JSON gets "Unexpected end of
+// JSON input", which is not a BeaconError, so the UI showed "the server did
+// not accept the move" for a move the server had already accepted.
+//
+// The cause: huma.Output structs that declare a `Status int` field must set
+// it on every return path. If the field exists but is left at its Go zero
+// value, huma uses that 0 as the response status internally and silently
+// skips serializing the body — DefaultStatus on the operation registration
+// does not save you, because it is only consulted when the struct has NO
+// Status field at all. TestE2EFullFlow above never caught this because it
+// only exercises list/create, and both were already setting Status
+// explicitly. This test exists to exercise every operation that returns an
+// existing resource, which is exactly the shape TestE2EFullFlow does not
+// cover.
+func TestE2ESingleResourceBodies(t *testing.T) {
+	h := newHarness(t)
+
+	_, body := h.do(http.MethodPost, "/v1/auth/signup", "", map[string]any{
+		"email": "grace@example.com", "name": "Grace", "password": "correct horse battery staple",
+	})
+	_, body = h.do(http.MethodPost, "/v1/auth/login", "", map[string]any{
+		"email": "grace@example.com", "password": "correct horse battery staple",
+	})
+	token, _ := body["token"].(string)
+
+	_, body = h.do(http.MethodPost, "/v1/orgs", token, map[string]any{"name": "Acme"})
+	orgID, _ := body["id"].(string)
+
+	_, body = h.do(http.MethodPost, "/v1/orgs/"+orgID+"/projects", token, map[string]any{"name": "Website"})
+	projectID, _ := body["id"].(string)
+	projectPath := "/v1/orgs/" + orgID + "/projects/" + projectID
+
+	_, body = h.do(http.MethodPost, projectPath+"/tasks", token, map[string]any{"title": "Ship it"})
+	taskID, _ := body["id"].(string)
+	taskPath := projectPath + "/tasks/" + taskID
+
+	cases := []struct {
+		name       string
+		method     string
+		path       string
+		reqBody    any
+		wantStatus int
+		wantField  string // a field that only appears on the real resource, not on {}
+	}{
+		{"get-project", http.MethodGet, projectPath, nil, http.StatusOK, "name"},
+		{
+			"update-project", http.MethodPatch, projectPath,
+			map[string]any{"name": "Website v2"}, http.StatusOK, "name",
+		},
+		{"get-task", http.MethodGet, taskPath, nil, http.StatusOK, "title"},
+		{
+			"update-task", http.MethodPatch, taskPath,
+			map[string]any{"title": "Ship it", "status": "in_progress", "position": 2000},
+			http.StatusOK, "title",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			status, body := h.do(tc.method, tc.path, token, tc.reqBody)
+			if status != tc.wantStatus {
+				t.Fatalf("status = %d, want %d (body=%v)", status, tc.wantStatus, body)
+			}
+			if body == nil {
+				t.Fatalf("%s: body was empty — the exact regression this test guards against", tc.name)
+			}
+			if body[tc.wantField] == nil {
+				t.Errorf("%s: response missing %q: %v", tc.name, tc.wantField, body)
+			}
+		})
+	}
+}
+
 func TestE2ENoTokenIs401(t *testing.T) {
 	h := newHarness(t)
 

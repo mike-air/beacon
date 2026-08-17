@@ -128,7 +128,7 @@ func (s *Server) registerProjects(api huma.API, g gates) {
 		if err != nil {
 			return nil, s.asHumaError(ctx, err)
 		}
-		return &ProjectOutput{Body: p}, nil
+		return &ProjectOutput{Status: http.StatusOK, Body: p}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -144,7 +144,7 @@ func (s *Server) registerProjects(api huma.API, g gates) {
 		if err != nil {
 			return nil, s.asHumaError(ctx, err)
 		}
-		return &ProjectOutput{Body: p}, nil
+		return &ProjectOutput{Status: http.StatusOK, Body: p}, nil
 	})
 
 	huma.Register(api, huma.Operation{

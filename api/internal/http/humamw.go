@@ -23,7 +23,6 @@ package http
 // chi middleware mounted at the root, where it still works untouched.
 
 import (
-	"errors"
 	"net"
 	"net/http"
 	"strconv"
@@ -44,16 +43,21 @@ type gate = func(huma.Context, func(huma.Context))
 
 // humaRequireAuth verifies the bearer token and puts the user id in context.
 // Everything below it may assume there is a caller.
+//
+// Errors here go through asHumaError + writeHumaError rather than
+// huma.WriteErr, so a gate's rejection carries the same `code` a handler's
+// would. See writeHumaError's comment for why that distinction is load-
+// bearing and not cosmetic.
 func (s *Server) humaRequireAuth(api huma.API) gate {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		raw, ok := bearerFromHeader(ctx.Header("Authorization"))
 		if !ok {
-			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "missing bearer token")
+			writeHumaError(ctx, s.asHumaError(ctx.Context(), auth.ErrInvalidToken))
 			return
 		}
 		userID, err := auth.ParseToken(s.cfg.JWTSecret, raw)
 		if err != nil {
-			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "invalid or expired token")
+			writeHumaError(ctx, s.asHumaError(ctx.Context(), auth.ErrInvalidToken))
 			return
 		}
 		next(huma.WithValue(ctx, auth.UserIDContextKey(), userID))
@@ -66,22 +70,22 @@ func (s *Server) humaRequireOrg(api huma.API) gate {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		userID, ok := auth.UserIDFrom(ctx.Context())
 		if !ok {
-			_ = huma.WriteErr(api, ctx, http.StatusUnauthorized, "authentication required")
+			writeHumaError(ctx, s.asHumaError(ctx.Context(), auth.ErrInvalidToken))
 			return
 		}
 		orgID := ctx.Param("orgID")
 
 		m, err := s.orgs.GetMembership(ctx.Context(), userID, orgID)
 		if err != nil {
-			if errors.Is(err, orgs.ErrNotMember) {
-				// 403, not 404. The caller proved who they are; they simply do
-				// not belong here. A 404 would be a small privacy win and a
-				// large debugging cost, and membership is not a secret.
-				_ = huma.WriteErr(api, ctx, http.StatusForbidden,
-					"you are not a member of this organization")
-				return
-			}
-			_ = huma.WriteErr(api, ctx, http.StatusInternalServerError, "could not load membership")
+			// classify() turns orgs.ErrNotMember into 403/not_member and
+			// anything else into the 500/internal_error fallback (logged,
+			// since classify reports it as unknown) — the same two outcomes
+			// the hand-written version below produced, but through the one
+			// place that mapping is allowed to live. 403, not 404: the caller
+			// proved who they are; they simply do not belong here. A 404
+			// would be a small privacy win and a large debugging cost, and
+			// membership is not a secret.
+			writeHumaError(ctx, s.asHumaError(ctx.Context(), err))
 			return
 		}
 		next(huma.WithValue(ctx, auth.RoleContextKey(), m.Role))
@@ -94,8 +98,7 @@ func (s *Server) humaRequireRole(api huma.API, min string) gate {
 	return func(ctx huma.Context, next func(huma.Context)) {
 		role, ok := auth.RoleFrom(ctx.Context())
 		if !ok || orgs.RoleRank(role) < orgs.RoleRank(min) {
-			_ = huma.WriteErr(api, ctx, http.StatusForbidden,
-				"you don't have permission to perform this action")
+			writeHumaError(ctx, s.asHumaError(ctx.Context(), orgs.ErrForbidden))
 			return
 		}
 		next(ctx)

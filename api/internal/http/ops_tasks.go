@@ -178,7 +178,7 @@ func (s *Server) registerTasks(api huma.API, g gates) {
 		if err != nil {
 			return nil, s.asHumaError(ctx, err)
 		}
-		return &TaskOutput{Body: t}, nil
+		return &TaskOutput{Status: http.StatusOK, Body: t}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -198,7 +198,7 @@ func (s *Server) registerTasks(api huma.API, g gates) {
 			return nil, s.asHumaError(ctx, err)
 		}
 		s.notifyTaskEvent(ctx, in.OrgID, eventTaskUpdated, t)
-		return &TaskOutput{Body: t}, nil
+		return &TaskOutput{Status: http.StatusOK, Body: t}, nil
 	})
 
 	huma.Register(api, huma.Operation{
@@ -324,7 +324,10 @@ func (s *Server) registerTasks(api huma.API, g gates) {
 		if err != nil {
 			return nil, s.asHumaError(ctx, err)
 		}
-		return &AttachmentOutput{Body: AttachmentEnvelope{Attachment: a, DownloadURL: url}}, nil
+		return &AttachmentOutput{
+			Status: http.StatusOK,
+			Body:   AttachmentEnvelope{Attachment: a, DownloadURL: url},
+		}, nil
 	})
 }
 
