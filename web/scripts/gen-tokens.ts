@@ -5,8 +5,16 @@
  * canvas and tests a typed name for every color, so nothing ever hardcodes a
  * hex outside the source file. (production-frontend ch12)
  *
- * Run: npm run gen:tokens. Nothing regenerates this automatically — a stale
- * output is a compile/PR-diff problem, which is the point.
+ * Both outputs are gitignored (*.gen.css, *.gen.ts) — generated, never
+ * committed, never hand-edited. `npm run build` and `npm run dev` both run
+ * this first, so every entry point regenerates from tokens.source.ts rather
+ * than trusting whatever copy happens to be sitting on disk. That is the
+ * point, not an accident: `dev` used to skip it, which worked on a machine
+ * that had already run `build` at least once and left the files behind, and
+ * failed outright on a genuinely fresh checkout — which is exactly what a CI
+ * runner is. `go test ./...`'s deadlock-from-a-shared-database bug and this
+ * one are the same shape of mistake: something that only works if a prior,
+ * uncoordinated step happened to leave the right state lying around.
  */
 import { writeFileSync } from "node:fs";
 import { tokens } from "../src/design/tokens.source";

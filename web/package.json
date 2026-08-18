@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "npm run gen:tokens && vite",
     "build": "npm run gen:tokens && tsc --noEmit && vite build && npm run budget",
     "preview": "vite preview",
     "gen:tokens": "tsx scripts/gen-tokens.ts",
