@@ -7,6 +7,33 @@ This is a study codebase: it is built to be **read**, not just run. Almost
 every non-obvious line has a comment saying why it is that way, and the four
 real bugs it has shipped are written up rather than quietly patched.
 
+![The board](docs/screenshots/board-dark.webp)
+
+<details>
+<summary>More screens</summary>
+
+Search, against Meilisearch — the badge names the backend that answered, because
+Beacon falls back to Postgres full-text when Meilisearch is unreachable and you
+want to know which one you are looking at.
+
+![Search](docs/screenshots/search-dark.webp)
+
+Sign-in.
+
+![Sign in](docs/screenshots/sign-in-dark.webp)
+
+Every screen is built twice, once per theme. A token is only correct if it
+answers both, and several of this project's colour bugs were visible in one
+theme only.
+
+![The board in light mode](docs/screenshots/board-light.webp)
+
+These are captured from a running instance by `web/scripts/shoot.ts`, not
+edited by hand — so they go stale the same way the code does, and are
+re-recorded the same way.
+
+</details>
+
 ---
 
 ## Start here
