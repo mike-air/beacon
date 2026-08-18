@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -14,7 +15,7 @@ import (
 const createComment = `-- name: CreateComment :one
 INSERT INTO comments (task_id, author_id, body)
 VALUES ($1, $2, $3)
-RETURNING id, task_id, author_id, body, created_at
+RETURNING id, task_id, author_id, body, created_at, updated_at, deleted_at
 `
 
 type CreateCommentParams struct {
@@ -23,15 +24,27 @@ type CreateCommentParams struct {
 	Body     string    `json:"body"`
 }
 
-func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error) {
+type CreateCommentRow struct {
+	ID        uuid.UUID  `json:"id"`
+	TaskID    uuid.UUID  `json:"task_id"`
+	AuthorID  uuid.UUID  `json:"author_id"`
+	Body      string     `json:"body"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
+}
+
+func (q *Queries) CreateComment(ctx context.Context, arg CreateCommentParams) (CreateCommentRow, error) {
 	row := q.db.QueryRow(ctx, createComment, arg.TaskID, arg.AuthorID, arg.Body)
-	var i Comment
+	var i CreateCommentRow
 	err := row.Scan(
 		&i.ID,
 		&i.TaskID,
 		&i.AuthorID,
 		&i.Body,
 		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -67,11 +80,13 @@ type CreateTaskParams struct {
 // projects.sql does it — see that file's header — even though every query
 // here already guarantees it is NULL.
 //
-// Comments have no deleted_at of their own (see the migration's header for
-// why); ListCommentsByTask instead joins tasks and checks it there, which is
-// also where it now checks org_id — that join closes a latent gap this query
-// had before Chapter 10 touched it: it filtered by task_id alone, so an org
-// member who knew another org's task id could read its comments.
+// Comments now have a deleted_at of their own — 0010 added it along with the
+// DELETE endpoint whose absence was 0009's stated reason for withholding one.
+// So a comment read checks BOTH: the parent task's deleted_at through the
+// join, and the comment's own. The join is also where org_id is checked, and
+// it closes a latent gap this query had before Chapter 10 touched it: it
+// filtered by task_id alone, so an org member who knew another org's task id
+// could read its comments.
 // INSERT ... SELECT, not VALUES, so the org owns the project or nothing is
 // written.
 //
@@ -114,6 +129,48 @@ func (q *Queries) CreateTask(ctx context.Context, arg CreateTaskParams) (Task, e
 	return i, err
 }
 
+const getCommentByID = `-- name: GetCommentByID :one
+SELECT comments.id, comments.task_id, comments.author_id, comments.body,
+       comments.created_at, comments.updated_at, comments.deleted_at
+FROM comments
+JOIN tasks ON tasks.id = comments.task_id
+WHERE comments.id = $1 AND tasks.org_id = $2
+  AND tasks.deleted_at IS NULL AND comments.deleted_at IS NULL
+`
+
+type GetCommentByIDParams struct {
+	ID    uuid.UUID `json:"id"`
+	OrgID uuid.UUID `json:"org_id"`
+}
+
+type GetCommentByIDRow struct {
+	ID        uuid.UUID  `json:"id"`
+	TaskID    uuid.UUID  `json:"task_id"`
+	AuthorID  uuid.UUID  `json:"author_id"`
+	Body      string     `json:"body"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
+}
+
+// Scoped through the parent task's org, the same join every other comment
+// query uses. The service reads this BEFORE an edit or a delete, because both
+// decisions need the author id and neither can be made from the request alone.
+func (q *Queries) GetCommentByID(ctx context.Context, arg GetCommentByIDParams) (GetCommentByIDRow, error) {
+	row := q.db.QueryRow(ctx, getCommentByID, arg.ID, arg.OrgID)
+	var i GetCommentByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AuthorID,
+		&i.Body,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const getTaskByID = `-- name: GetTaskByID :one
 SELECT id, org_id, project_id, title, status, position, created_at, updated_at, deleted_at
 FROM tasks
@@ -143,10 +200,12 @@ func (q *Queries) GetTaskByID(ctx context.Context, arg GetTaskByIDParams) (Task,
 }
 
 const listCommentsByTask = `-- name: ListCommentsByTask :many
-SELECT comments.id, comments.task_id, comments.author_id, comments.body, comments.created_at
+SELECT comments.id, comments.task_id, comments.author_id, comments.body,
+       comments.created_at, comments.updated_at, comments.deleted_at
 FROM comments
 JOIN tasks ON tasks.id = comments.task_id
-WHERE comments.task_id = $1 AND tasks.org_id = $2 AND tasks.deleted_at IS NULL
+WHERE comments.task_id = $1 AND tasks.org_id = $2
+  AND tasks.deleted_at IS NULL AND comments.deleted_at IS NULL
 ORDER BY comments.created_at ASC
 `
 
@@ -155,21 +214,33 @@ type ListCommentsByTaskParams struct {
 	OrgID  uuid.UUID `json:"org_id"`
 }
 
-func (q *Queries) ListCommentsByTask(ctx context.Context, arg ListCommentsByTaskParams) ([]Comment, error) {
+type ListCommentsByTaskRow struct {
+	ID        uuid.UUID  `json:"id"`
+	TaskID    uuid.UUID  `json:"task_id"`
+	AuthorID  uuid.UUID  `json:"author_id"`
+	Body      string     `json:"body"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
+}
+
+func (q *Queries) ListCommentsByTask(ctx context.Context, arg ListCommentsByTaskParams) ([]ListCommentsByTaskRow, error) {
 	rows, err := q.db.Query(ctx, listCommentsByTask, arg.TaskID, arg.OrgID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Comment
+	var items []ListCommentsByTaskRow
 	for rows.Next() {
-		var i Comment
+		var i ListCommentsByTaskRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.TaskID,
 			&i.AuthorID,
 			&i.Body,
 			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -256,6 +327,30 @@ func (q *Queries) MaxTaskPosition(ctx context.Context, arg MaxTaskPositionParams
 	return column_1, err
 }
 
+const softDeleteComment = `-- name: SoftDeleteComment :execrows
+UPDATE comments SET deleted_at = now()
+FROM tasks
+WHERE comments.id = $1 AND comments.task_id = tasks.id
+  AND tasks.org_id = $2
+  AND tasks.deleted_at IS NULL AND comments.deleted_at IS NULL
+`
+
+type SoftDeleteCommentParams struct {
+	ID    uuid.UUID `json:"id"`
+	OrgID uuid.UUID `json:"org_id"`
+}
+
+// No author_id here, unlike UpdateComment: an org admin may delete a comment
+// they did not write (moderation), so the caller check cannot live in the SQL.
+// The service decides, and :execrows lets it tell "not yours" from "not there".
+func (q *Queries) SoftDeleteComment(ctx context.Context, arg SoftDeleteCommentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteComment, arg.ID, arg.OrgID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const softDeleteTask = `-- name: SoftDeleteTask :execrows
 UPDATE tasks SET deleted_at = now()
 WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL
@@ -285,6 +380,57 @@ WHERE project_id = $1 AND deleted_at IS NULL
 func (q *Queries) SoftDeleteTasksByProject(ctx context.Context, projectID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, softDeleteTasksByProject, projectID)
 	return err
+}
+
+const updateComment = `-- name: UpdateComment :one
+UPDATE comments SET body = $4, updated_at = now()
+FROM tasks
+WHERE comments.id = $1 AND comments.task_id = tasks.id
+  AND tasks.org_id = $2 AND comments.author_id = $3
+  AND tasks.deleted_at IS NULL AND comments.deleted_at IS NULL
+RETURNING comments.id, comments.task_id, comments.author_id, comments.body,
+          comments.created_at, comments.updated_at, comments.deleted_at
+`
+
+type UpdateCommentParams struct {
+	ID       uuid.UUID `json:"id"`
+	OrgID    uuid.UUID `json:"org_id"`
+	AuthorID uuid.UUID `json:"author_id"`
+	Body     string    `json:"body"`
+}
+
+type UpdateCommentRow struct {
+	ID        uuid.UUID  `json:"id"`
+	TaskID    uuid.UUID  `json:"task_id"`
+	AuthorID  uuid.UUID  `json:"author_id"`
+	Body      string     `json:"body"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+	DeletedAt *time.Time `json:"deleted_at"`
+}
+
+// The author_id in the WHERE clause is the authorisation, not just a filter.
+// The service checks it too and returns a clearer error, but repeating it here
+// means no future caller can edit somebody else's words by reaching the repo
+// directly — the same argument as CreateTask's INSERT ... SELECT.
+func (q *Queries) UpdateComment(ctx context.Context, arg UpdateCommentParams) (UpdateCommentRow, error) {
+	row := q.db.QueryRow(ctx, updateComment,
+		arg.ID,
+		arg.OrgID,
+		arg.AuthorID,
+		arg.Body,
+	)
+	var i UpdateCommentRow
+	err := row.Scan(
+		&i.ID,
+		&i.TaskID,
+		&i.AuthorID,
+		&i.Body,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
 }
 
 const updateTask = `-- name: UpdateTask :one

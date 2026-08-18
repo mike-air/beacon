@@ -63,6 +63,12 @@ type TaskPath struct {
 	TaskID string `path:"taskID" format:"uuid" doc:"The task"`
 }
 
+// CommentPath extends TaskPath for the two routes that address one comment.
+type CommentPath struct {
+	TaskPath
+	CommentID string `path:"commentID" format:"uuid" doc:"The comment"`
+}
+
 // IdempotencyHeader is embedded in every mutating input.
 //
 // Declaring it here is what puts the header in the OpenAPI document, which is

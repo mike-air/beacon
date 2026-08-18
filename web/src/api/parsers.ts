@@ -103,6 +103,10 @@ export const commentSchema = z.object({
   author_id: uuid,
   body: z.string(),
   created_at: dateTime,
+  updated_at: dateTime,
+  // Derived server-side rather than compared here, so every client agrees on
+  // what counts as edited. See tasks.newComment.
+  edited: z.boolean(),
 });
 export type _CommentOk = True<Exact<z.infer<typeof commentSchema>, Comment>>;
 

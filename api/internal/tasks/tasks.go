@@ -12,10 +12,16 @@
 //
 // Course mapping: Chapter 10 — soft deletes and an audit trail. Delete sets
 // deleted_at instead of removing the row, in the same transaction as the
-// audit entry recording who deleted it. Comments have no deleted_at of their
-// own; ListByTask now also takes org_id, because the query behind it joins to
-// tasks to check both org_id and deleted_at there — see internal/db/queries/
-// tasks.sql's header for why that join exists.
+// audit entry recording who deleted it. Comments have their own deleted_at as
+// of 0010, added with the DELETE endpoint whose absence had been the reason
+// they went without one; ListByTask also takes org_id, because the query
+// behind it joins to tasks to check org_id and the task's deleted_at there —
+// see internal/db/queries/tasks.sql's header for why that join exists.
+//
+// Who may do what to a comment: the author edits their own and nobody else's,
+// because an admin rewriting somebody's words under their name has no
+// legitimate use. Deleting is wider — the author, or an org admin/owner, so a
+// leaked secret is removable by someone other than whoever posted it.
 package tasks
 
 import (
@@ -34,6 +40,7 @@ import (
 
 	"beacon/internal/audit"
 	"beacon/internal/db"
+	"beacon/internal/orgs"
 )
 
 // Sentinel errors.
@@ -48,6 +55,18 @@ var (
 	// a tenant should not be able to use this endpoint to learn that another
 	// tenant's project id is real.
 	ErrProjectNotFound = errors.New("project not found")
+	// ErrCommentNotFound covers a comment that does not exist, is already
+	// deleted, or belongs to another org — one answer for all three, so the
+	// endpoint cannot be used to probe for real comment ids.
+	ErrCommentNotFound = errors.New("comment not found")
+	// ErrNotCommentAuthor is an edit attempt on somebody else's comment. It is
+	// deliberately distinct from ErrCommentNotFound: the comment IS there and
+	// the caller can already read it, so pretending otherwise would just make
+	// the UI unexplainable. Nothing is disclosed that a read did not disclose.
+	ErrNotCommentAuthor = errors.New("only the author can edit a comment")
+	// ErrCannotDeleteComment is a delete attempt by someone who is neither the
+	// author nor an org admin.
+	ErrCannotDeleteComment = errors.New("only the author or an admin can delete a comment")
 )
 
 // Valid task statuses (matches the CHECK constraint in 0001_init.up.sql).
@@ -85,6 +104,12 @@ type Comment struct {
 	AuthorID  string    `json:"author_id"`
 	Body      string    `json:"body"`
 	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	// Edited is derived, not stored: it is UpdatedAt being meaningfully later
+	// than CreatedAt. Computed here so every client marks an edited comment the
+	// same way — left to the browser, one of them compares two timestamps with
+	// the wrong precision and quietly labels every comment edited.
+	Edited bool `json:"edited"`
 }
 
 // Repo is the tasks + comments repository backed by sqlc-generated queries.
@@ -109,14 +134,39 @@ func toTask(t db.Task) Task {
 	}
 }
 
-func toComment(c db.Comment) Comment {
+// newComment is the one place a Comment is assembled.
+//
+// sqlc emits a distinct row struct per query — db.Comment, GetCommentByIDRow,
+// UpdateCommentRow, ListCommentsByTaskRow — with identical fields and no
+// common interface, so every caller would otherwise repeat this mapping and
+// the Edited rule with it. Taking the fields instead of a row type keeps that
+// rule in exactly one place.
+func newComment(id, taskID, authorID uuid.UUID, body string, created, updated time.Time) Comment {
 	return Comment{
-		ID:        c.ID.String(),
-		TaskID:    c.TaskID.String(),
-		AuthorID:  c.AuthorID.String(),
-		Body:      c.Body,
-		CreatedAt: c.CreatedAt,
+		ID:        id.String(),
+		TaskID:    taskID.String(),
+		AuthorID:  authorID.String(),
+		Body:      body,
+		CreatedAt: created,
+		UpdatedAt: updated,
+		// Exact inequality, no tolerance window.
+		//
+		// Postgres now() is the TRANSACTION timestamp, not the clock read at
+		// each column, so an insert sets created_at and updated_at from the
+		// same value and they come back byte-identical — verified against a
+		// real database rather than assumed. An edit runs in a later
+		// transaction and therefore always differs.
+		//
+		// The first version of this allowed a second of slack, to be "safe"
+		// about the two defaults racing. They cannot race, and the slack meant
+		// a correction made within a second of posting — the most common kind
+		// — was silently not marked as an edit.
+		Edited: !updated.Equal(created),
 	}
+}
+
+func toComment(c db.CreateCommentRow) Comment {
+	return newComment(c.ID, c.TaskID, c.AuthorID, c.Body, c.CreatedAt, c.UpdatedAt)
 }
 
 // Create inserts a task in the given org + project.
@@ -271,6 +321,78 @@ func (r *Repo) CreateComment(ctx context.Context, taskID, authorID, body string)
 // ListByTask returns every comment on a task, oldest first. Scoped by org
 // through a join to tasks, which is also where a soft-deleted task's comments
 // stop being visible — see the query's own header.
+// getComment reads one comment, scoped to the org through its parent task.
+// Both mutating paths call this first: an edit needs the author id to compare
+// against the caller, and a delete needs it to decide between "your own" and
+// "moderation".
+func (r *Repo) getComment(ctx context.Context, orgID, commentID string) (Comment, error) {
+	cid, err := uuid.Parse(commentID)
+	if err != nil {
+		return Comment{}, ErrCommentNotFound
+	}
+	oid, err := uuid.Parse(orgID)
+	if err != nil {
+		return Comment{}, ErrCommentNotFound
+	}
+	c, err := r.q.GetCommentByID(ctx, db.GetCommentByIDParams{ID: cid, OrgID: oid})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Comment{}, ErrCommentNotFound
+		}
+		return Comment{}, fmt.Errorf("tasks.getComment: %w", err)
+	}
+	return newComment(c.ID, c.TaskID, c.AuthorID, c.Body, c.CreatedAt, c.UpdatedAt), nil
+}
+
+func (r *Repo) updateComment(ctx context.Context, orgID, commentID, authorID, body string) (Comment, error) {
+	cid, err := uuid.Parse(commentID)
+	if err != nil {
+		return Comment{}, ErrCommentNotFound
+	}
+	oid, err := uuid.Parse(orgID)
+	if err != nil {
+		return Comment{}, ErrCommentNotFound
+	}
+	aid, err := uuid.Parse(authorID)
+	if err != nil {
+		return Comment{}, ErrNotCommentAuthor
+	}
+	c, err := r.q.UpdateComment(ctx, db.UpdateCommentParams{
+		ID: cid, OrgID: oid, AuthorID: aid, Body: body,
+	})
+	if err != nil {
+		// The query carries the author check too, so no rows here means the
+		// caller is not the author — the service already returned a clearer
+		// error for that, and this covers a racing delete in between.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Comment{}, ErrCommentNotFound
+		}
+		return Comment{}, fmt.Errorf("tasks.updateComment: %w", err)
+	}
+	return newComment(c.ID, c.TaskID, c.AuthorID, c.Body, c.CreatedAt, c.UpdatedAt), nil
+}
+
+// softDeleteComment takes a caller-supplied Queries so the delete and its
+// audit entry commit together.
+func (r *Repo) softDeleteComment(ctx context.Context, q *db.Queries, orgID, commentID string) error {
+	cid, err := uuid.Parse(commentID)
+	if err != nil {
+		return ErrCommentNotFound
+	}
+	oid, err := uuid.Parse(orgID)
+	if err != nil {
+		return ErrCommentNotFound
+	}
+	n, err := q.SoftDeleteComment(ctx, db.SoftDeleteCommentParams{ID: cid, OrgID: oid})
+	if err != nil {
+		return fmt.Errorf("tasks.softDeleteComment: %w", err)
+	}
+	if n == 0 {
+		return ErrCommentNotFound
+	}
+	return nil
+}
+
 func (r *Repo) ListByTask(ctx context.Context, orgID, taskID string) ([]Comment, error) {
 	tid, err := uuid.Parse(taskID)
 	if err != nil {
@@ -286,7 +408,7 @@ func (r *Repo) ListByTask(ctx context.Context, orgID, taskID string) ([]Comment,
 	}
 	out := make([]Comment, 0, len(rows))
 	for _, c := range rows {
-		out = append(out, toComment(c))
+		out = append(out, newComment(c.ID, c.TaskID, c.AuthorID, c.Body, c.CreatedAt, c.UpdatedAt))
 	}
 	return out, nil
 }
@@ -392,4 +514,63 @@ func (s *Service) Comments(ctx context.Context, orgID, taskID string) ([]Comment
 		return nil, err
 	}
 	return s.repo.ListByTask(ctx, orgID, taskID)
+}
+
+// UpdateComment rewrites a comment's body. Only its author may do this.
+//
+// Not admins, deliberately, and this is the one place the two verbs part
+// company: an admin deleting a comment removes something from the record,
+// which is moderation; an admin EDITING one would put words in somebody's
+// mouth under that person's name. There is no legitimate version of that, so
+// the capability does not exist rather than being guarded by a role check.
+func (s *Service) UpdateComment(ctx context.Context, orgID, commentID, actorID, body string) (Comment, error) {
+	existing, err := s.repo.getComment(ctx, orgID, commentID)
+	if err != nil {
+		return Comment{}, err
+	}
+	if existing.AuthorID != actorID {
+		return Comment{}, ErrNotCommentAuthor
+	}
+	return s.repo.updateComment(ctx, orgID, commentID, actorID, body)
+}
+
+// DeleteComment soft-deletes a comment. The author may delete their own; an
+// org admin or owner may delete anyone's, which is the moderation path — a
+// leaked secret or an abusive message has to be removable by someone other
+// than the person who posted it.
+//
+// The delete and its audit entry share one transaction, the same shape
+// Delete uses: an admin removing someone else's words is exactly the event
+// Chapter 10's audit log exists to answer "who did this, and when" about.
+func (s *Service) DeleteComment(ctx context.Context, orgID, commentID, actorID, actorRole string) error {
+	existing, err := s.repo.getComment(ctx, orgID, commentID)
+	if err != nil {
+		return err
+	}
+	if existing.AuthorID != actorID && orgs.RoleRank(actorRole) < orgs.RoleRank(orgs.RoleAdmin) {
+		return ErrCannotDeleteComment
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("tasks.DeleteComment: begin: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // no-op after a successful commit
+
+	qtx := s.repo.q.WithTx(tx)
+	if err := s.repo.softDeleteComment(ctx, qtx, orgID, commentID); err != nil {
+		return err
+	}
+
+	if err := audit.Write(ctx, qtx, audit.Entry{
+		OrgID: orgID, ActorID: actorID,
+		Action: "comment.deleted", ResourceType: "comment", ResourceID: commentID,
+	}); err != nil {
+		return fmt.Errorf("tasks.DeleteComment: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("tasks.DeleteComment: commit: %w", err)
+	}
+	return nil
 }

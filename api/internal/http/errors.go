@@ -60,6 +60,8 @@ func classify(err error) (status int, code, message string, fields []fieldError,
 		return http.StatusNotFound, "user_not_found", "user not found", nil, true
 	case errors.Is(err, attachments.ErrNotFound):
 		return http.StatusNotFound, "attachment_not_found", "attachment not found", nil, true
+	case errors.Is(err, tasks.ErrCommentNotFound):
+		return http.StatusNotFound, "comment_not_found", "comment not found", nil, true
 	case errors.Is(err, webhooks.ErrNotFound):
 		return http.StatusNotFound, "webhook_not_found", "webhook not found", nil, true
 
@@ -74,6 +76,12 @@ func classify(err error) (status int, code, message string, fields []fieldError,
 	case errors.Is(err, orgs.ErrNotMember):
 		return http.StatusForbidden, "not_member",
 			"you are not a member of this organization", nil, true
+	case errors.Is(err, tasks.ErrNotCommentAuthor):
+		return http.StatusForbidden, "not_comment_author",
+			"only the author can edit a comment", nil, true
+	case errors.Is(err, tasks.ErrCannotDeleteComment):
+		return http.StatusForbidden, "cannot_delete_comment",
+			"only the author or an org admin can delete a comment", nil, true
 
 	// 409 — conflict.
 	case errors.Is(err, users.ErrEmailTaken):

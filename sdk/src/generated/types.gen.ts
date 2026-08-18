@@ -35,8 +35,10 @@ export type Comment = {
     author_id: string;
     body: string;
     created_at: string;
+    edited: boolean;
     id: string;
     task_id: string;
+    updated_at: string;
 };
 
 export type CreateAttachmentInputBody = {
@@ -268,6 +270,10 @@ export type Task = {
     status: 'todo' | 'in_progress' | 'done';
     title: string;
     updated_at: string;
+};
+
+export type UpdateCommentInputBody = {
+    body: string;
 };
 
 export type UpdateProjectInputBody = {
@@ -1282,6 +1288,96 @@ export type CreateCommentResponses = {
 };
 
 export type CreateCommentResponse = CreateCommentResponses[keyof CreateCommentResponses];
+
+export type DeleteCommentData = {
+    body?: never;
+    path: {
+        /**
+         * The organisation
+         */
+        orgID: string;
+        /**
+         * The project
+         */
+        projectID: string;
+        /**
+         * The task
+         */
+        taskID: string;
+        /**
+         * The comment
+         */
+        commentID: string;
+    };
+    query?: never;
+    url: '/v1/orgs/{orgID}/projects/{projectID}/tasks/{taskID}/comments/{commentID}';
+};
+
+export type DeleteCommentErrors = {
+    /**
+     * Error
+     */
+    default: HumaError;
+};
+
+export type DeleteCommentError = DeleteCommentErrors[keyof DeleteCommentErrors];
+
+export type DeleteCommentResponses = {
+    /**
+     * No Content
+     */
+    204: void;
+};
+
+export type DeleteCommentResponse = DeleteCommentResponses[keyof DeleteCommentResponses];
+
+export type UpdateCommentData = {
+    body: UpdateCommentInputBody;
+    headers?: {
+        /**
+         * Repeating a request with the same key replays the original response instead of performing the write twice.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        /**
+         * The organisation
+         */
+        orgID: string;
+        /**
+         * The project
+         */
+        projectID: string;
+        /**
+         * The task
+         */
+        taskID: string;
+        /**
+         * The comment
+         */
+        commentID: string;
+    };
+    query?: never;
+    url: '/v1/orgs/{orgID}/projects/{projectID}/tasks/{taskID}/comments/{commentID}';
+};
+
+export type UpdateCommentErrors = {
+    /**
+     * Error
+     */
+    default: HumaError;
+};
+
+export type UpdateCommentError = UpdateCommentErrors[keyof UpdateCommentErrors];
+
+export type UpdateCommentResponses = {
+    /**
+     * OK
+     */
+    200: Comment;
+};
+
+export type UpdateCommentResponse = UpdateCommentResponses[keyof UpdateCommentResponses];
 
 export type SearchData = {
     body?: never;

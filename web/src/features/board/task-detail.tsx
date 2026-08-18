@@ -4,8 +4,9 @@ import { useRef, useState } from "react";
 import { tasks as tasksApi } from "@/api/endpoints";
 import { BeaconError } from "@beacon/sdk";
 import { keys, useAttachments, useComments } from "@/api/queries";
+import { useOrgContext } from "@/features/org/org-gate";
+import { CommentItem } from "./comment-item";
 import { STATUS_LABEL, TASK_STATUSES, type Task, type TaskStatus } from "@/api/types";
-import { Avatar } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -45,6 +46,9 @@ export function TaskDetail({
 }) {
   const qc = useQueryClient();
   const toast = useToast();
+  // Who is looking, and with what rights — the two facts that decide which
+  // affordances a comment shows. Only for display; the API enforces both.
+  const { org, user } = useOrgContext();
   const comments = useComments(orgID, projectID, task?.id);
   const attachments = useAttachments(orgID, projectID, task?.id);
   const [draft, setDraft] = useState("");
@@ -61,6 +65,38 @@ export function TaskDetail({
       toast({
         tone: "danger",
         title: "Comment not saved",
+        description: e instanceof BeaconError ? e.message : "Try again.",
+      }),
+  });
+
+  // Both refetch rather than patching the cache by hand. The list is small,
+  // already loaded, and a refetch is the version that cannot drift from what
+  // the server actually stored — which matters most for the edit, where the
+  // server sets updated_at and derives `edited`.
+  const invalidateComments = () =>
+    qc.invalidateQueries({ queryKey: keys.comments(orgID, projectID, task!.id) });
+
+  const editComment = useMutation({
+    mutationFn: (v: { id: string; body: string }) =>
+      tasksApi.editComment(orgID, projectID, task!.id, v.id, { body: v.body }),
+    onSuccess: () => void invalidateComments(),
+    onError: (e) =>
+      toast({
+        tone: "danger",
+        title: "Comment not updated",
+        // The server's message names the actual rule ("only the author can
+        // edit a comment"), which is more use than a generic retry prompt.
+        description: e instanceof BeaconError ? e.message : "Try again.",
+      }),
+  });
+
+  const removeComment = useMutation({
+    mutationFn: (id: string) => tasksApi.removeComment(orgID, projectID, task!.id, id),
+    onSuccess: () => void invalidateComments(),
+    onError: (e) =>
+      toast({
+        tone: "danger",
+        title: "Comment not deleted",
         description: e instanceof BeaconError ? e.message : "Try again.",
       }),
   });
@@ -226,15 +262,19 @@ export function TaskDetail({
           {comments.isSuccess && comments.data.items.length > 0 && (
             <ul className="max-h-52 space-y-3 overflow-y-auto pr-1">
               {comments.data.items.map((c) => (
-                <li key={c.id} className="flex gap-2">
-                  <Avatar name={c.author_id.slice(0, 2)} size="sm" />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-ui text-ink">{c.body}</p>
-                    <p className="mt-0.5 font-mono text-micro text-ink-faint">
-                      {when(c.created_at)}
-                    </p>
-                  </div>
-                </li>
+                <CommentItem
+                  key={c.id}
+                  comment={c}
+                  currentUserID={user?.id}
+                  currentRole={org.role}
+                  when={when}
+                  busy={
+                    (editComment.isPending && editComment.variables?.id === c.id) ||
+                    (removeComment.isPending && removeComment.variables === c.id)
+                  }
+                  onEdit={(body) => editComment.mutate({ id: c.id, body })}
+                  onDelete={() => removeComment.mutate(c.id)}
+                />
               ))}
             </ul>
           )}

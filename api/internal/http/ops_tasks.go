@@ -116,6 +116,16 @@ type CreateCommentInput struct {
 	}
 }
 
+type UpdateCommentInput struct {
+	CommentPath
+	IdempotencyHeader
+	Body struct {
+		Body string `json:"body" minLength:"1" maxLength:"10000" required:"true"`
+	}
+}
+
+type DeleteCommentInput struct{ CommentPath }
+
 type CommentOutput struct {
 	Status int
 	Body   tasks.Comment
@@ -326,6 +336,50 @@ func (s *Server) registerTasks(api huma.API, g gates) {
 			return nil, s.asHumaError(ctx, err)
 		}
 		return &CommentOutput{Status: http.StatusCreated, Body: c}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "update-comment",
+		Method:      http.MethodPatch,
+		Path:        "/v1/orgs/{orgID}/projects/{projectID}/tasks/{taskID}/comments/{commentID}",
+		Summary:     "Edit a comment",
+		Description: "Only the comment's author may edit it. The response carries " +
+			"`edited: true` once the body has changed, so a reader can see that " +
+			"what they are reading is not what was first posted.",
+		Tags:        []string{"comments"},
+		Security:    sec,
+		Middlewares: g.orgScoped,
+	}, func(ctx context.Context, in *UpdateCommentInput) (*CommentOutput, error) {
+		actorID, _ := auth.UserIDFrom(ctx)
+		c, err := s.tasks.UpdateComment(ctx, in.OrgID, in.CommentID, actorID, in.Body.Body)
+		if err != nil {
+			return nil, s.asHumaError(ctx, err)
+		}
+		return &CommentOutput{Status: http.StatusOK, Body: c}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "delete-comment",
+		Method:      http.MethodDelete,
+		Path:        "/v1/orgs/{orgID}/projects/{projectID}/tasks/{taskID}/comments/{commentID}",
+		Summary:     "Delete a comment",
+		Description: "The author may delete their own comment; an org admin or " +
+			"owner may delete anyone's, so a leaked secret can be removed by " +
+			"someone other than whoever posted it.",
+		Tags:          []string{"comments"},
+		Security:      sec,
+		DefaultStatus: http.StatusNoContent,
+		Middlewares:   g.orgScoped,
+	}, func(ctx context.Context, in *DeleteCommentInput) (*NoContentOutput, error) {
+		actorID, _ := auth.UserIDFrom(ctx)
+		// The role was put on the context by humaRequireOrg, which has already
+		// proved membership. Reading it here rather than re-querying keeps the
+		// moderation check on the same fact the gate used.
+		actorRole, _ := auth.RoleFrom(ctx)
+		if err := s.tasks.DeleteComment(ctx, in.OrgID, in.CommentID, actorID, actorRole); err != nil {
+			return nil, s.asHumaError(ctx, err)
+		}
+		return &NoContentOutput{}, nil
 	})
 
 	// ---- attachments -------------------------------------------------------

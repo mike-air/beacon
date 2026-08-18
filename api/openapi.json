@@ -94,10 +94,17 @@
             "format": "date-time",
             "type": "string"
           },
+          "edited": {
+            "type": "boolean"
+          },
           "id": {
             "type": "string"
           },
           "task_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
             "type": "string"
           }
         },
@@ -106,7 +113,9 @@
           "task_id",
           "author_id",
           "body",
-          "created_at"
+          "created_at",
+          "updated_at",
+          "edited"
         ],
         "type": "object"
       },
@@ -945,6 +954,20 @@
           "position",
           "created_at",
           "updated_at"
+        ],
+        "type": "object"
+      },
+      "UpdateCommentInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "maxLength": 10000,
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "body"
         ],
         "type": "object"
       },
@@ -2921,6 +2944,182 @@
           }
         ],
         "summary": "Comment on the task",
+        "tags": [
+          "comments"
+        ]
+      }
+    },
+    "/v1/orgs/{orgID}/projects/{projectID}/tasks/{taskID}/comments/{commentID}": {
+      "delete": {
+        "description": "The author may delete their own comment; an org admin or owner may delete anyone's, so a leaked secret can be removed by someone other than whoever posted it.",
+        "operationId": "delete-comment",
+        "parameters": [
+          {
+            "description": "The organisation",
+            "in": "path",
+            "name": "orgID",
+            "required": true,
+            "schema": {
+              "description": "The organisation",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The project",
+            "in": "path",
+            "name": "projectID",
+            "required": true,
+            "schema": {
+              "description": "The project",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The task",
+            "in": "path",
+            "name": "taskID",
+            "required": true,
+            "schema": {
+              "description": "The task",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The comment",
+            "in": "path",
+            "name": "commentID",
+            "required": true,
+            "schema": {
+              "description": "The comment",
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumaError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete a comment",
+        "tags": [
+          "comments"
+        ]
+      },
+      "patch": {
+        "description": "Only the comment's author may edit it. The response carries `edited: true` once the body has changed, so a reader can see that what they are reading is not what was first posted.",
+        "operationId": "update-comment",
+        "parameters": [
+          {
+            "description": "The organisation",
+            "in": "path",
+            "name": "orgID",
+            "required": true,
+            "schema": {
+              "description": "The organisation",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The project",
+            "in": "path",
+            "name": "projectID",
+            "required": true,
+            "schema": {
+              "description": "The project",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The task",
+            "in": "path",
+            "name": "taskID",
+            "required": true,
+            "schema": {
+              "description": "The task",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The comment",
+            "in": "path",
+            "name": "commentID",
+            "required": true,
+            "schema": {
+              "description": "The comment",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repeating a request with the same key replays the original response instead of performing the write twice.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "description": "Repeating a request with the same key replays the original response instead of performing the write twice.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCommentInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Comment"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumaError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Edit a comment",
         "tags": [
           "comments"
         ]

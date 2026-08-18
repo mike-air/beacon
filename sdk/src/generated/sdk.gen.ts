@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddMemberData, AddMemberErrors, AddMemberResponses, CreateAttachmentData, CreateAttachmentErrors, CreateAttachmentResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateOrgData, CreateOrgErrors, CreateOrgResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateTaskData, CreateTaskErrors, CreateTaskResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteTaskData, DeleteTaskErrors, DeleteTaskResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EventsData, EventsErrors, EventsResponses, GetAttachmentData, GetAttachmentErrors, GetAttachmentResponses, GetMeData, GetMeErrors, GetMeResponses, GetPreferencesData, GetPreferencesErrors, GetPreferencesResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetTaskData, GetTaskErrors, GetTaskResponses, ImportTasksData, ImportTasksErrors, ImportTasksResponses, ListAttachmentsData, ListAttachmentsErrors, ListAttachmentsResponses, ListAuditLogData, ListAuditLogErrors, ListAuditLogResponses, ListCommentsData, ListCommentsErrors, ListCommentsResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListOrgsData, ListOrgsErrors, ListOrgsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListTasksData, ListTasksErrors, ListTasksResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, LoginData, LoginErrors, LoginResponses, RegisterWebhookData, RegisterWebhookErrors, RegisterWebhookResponses, SearchData, SearchErrors, SearchResponses, SetPreferencesData, SetPreferencesErrors, SetPreferencesResponses, SignupData, SignupErrors, SignupResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateTaskData, UpdateTaskErrors, UpdateTaskResponses } from './types.gen';
+import type { AddMemberData, AddMemberErrors, AddMemberResponses, CreateAttachmentData, CreateAttachmentErrors, CreateAttachmentResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateOrgData, CreateOrgErrors, CreateOrgResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateTaskData, CreateTaskErrors, CreateTaskResponses, DeleteCommentData, DeleteCommentErrors, DeleteCommentResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteTaskData, DeleteTaskErrors, DeleteTaskResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EventsData, EventsErrors, EventsResponses, GetAttachmentData, GetAttachmentErrors, GetAttachmentResponses, GetMeData, GetMeErrors, GetMeResponses, GetPreferencesData, GetPreferencesErrors, GetPreferencesResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetTaskData, GetTaskErrors, GetTaskResponses, ImportTasksData, ImportTasksErrors, ImportTasksResponses, ListAttachmentsData, ListAttachmentsErrors, ListAttachmentsResponses, ListAuditLogData, ListAuditLogErrors, ListAuditLogResponses, ListCommentsData, ListCommentsErrors, ListCommentsResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListOrgsData, ListOrgsErrors, ListOrgsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListTasksData, ListTasksErrors, ListTasksResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, LoginData, LoginErrors, LoginResponses, RegisterWebhookData, RegisterWebhookErrors, RegisterWebhookResponses, SearchData, SearchErrors, SearchResponses, SetPreferencesData, SetPreferencesErrors, SetPreferencesResponses, SignupData, SignupErrors, SignupResponses, UpdateCommentData, UpdateCommentErrors, UpdateCommentResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateTaskData, UpdateTaskErrors, UpdateTaskResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -412,6 +412,36 @@ export class Sdk extends HeyApiClient {
         return (options.client ?? this.client).post<CreateCommentResponses, CreateCommentErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/v1/orgs/{orgID}/projects/{projectID}/tasks/{taskID}/comments',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Delete a comment
+     *
+     * The author may delete their own comment; an org admin or owner may delete anyone's, so a leaked secret can be removed by someone other than whoever posted it.
+     */
+    public deleteComment<ThrowOnError extends boolean = false>(options: Options<DeleteCommentData, ThrowOnError>) {
+        return (options.client ?? this.client).delete<DeleteCommentResponses, DeleteCommentErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/v1/orgs/{orgID}/projects/{projectID}/tasks/{taskID}/comments/{commentID}',
+            ...options
+        });
+    }
+    
+    /**
+     * Edit a comment
+     *
+     * Only the comment's author may edit it. The response carries `edited: true` once the body has changed, so a reader can see that what they are reading is not what was first posted.
+     */
+    public updateComment<ThrowOnError extends boolean = false>(options: Options<UpdateCommentData, ThrowOnError>) {
+        return (options.client ?? this.client).patch<UpdateCommentResponses, UpdateCommentErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/v1/orgs/{orgID}/projects/{projectID}/tasks/{taskID}/comments/{commentID}',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

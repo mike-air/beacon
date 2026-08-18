@@ -29,7 +29,7 @@ type Querier interface {
 	// can be sanity-checked first.
 	CountAssignmentsByVariant(ctx context.Context, experimentKey string) ([]CountAssignmentsByVariantRow, error)
 	CreateAttachment(ctx context.Context, arg CreateAttachmentParams) (Attachment, error)
-	CreateComment(ctx context.Context, arg CreateCommentParams) (Comment, error)
+	CreateComment(ctx context.Context, arg CreateCommentParams) (CreateCommentRow, error)
 	CreateDelivery(ctx context.Context, arg CreateDeliveryParams) (uuid.UUID, error)
 	// Organizations + memberships — the multi-tenant core. (Chapter 8 / sqlc)
 	CreateOrg(ctx context.Context, arg CreateOrgParams) (CreateOrgRow, error)
@@ -58,11 +58,13 @@ type Querier interface {
 	// projects.sql does it — see that file's header — even though every query
 	// here already guarantees it is NULL.
 	//
-	// Comments have no deleted_at of their own (see the migration's header for
-	// why); ListCommentsByTask instead joins tasks and checks it there, which is
-	// also where it now checks org_id — that join closes a latent gap this query
-	// had before Chapter 10 touched it: it filtered by task_id alone, so an org
-	// member who knew another org's task id could read its comments.
+	// Comments now have a deleted_at of their own — 0010 added it along with the
+	// DELETE endpoint whose absence was 0009's stated reason for withholding one.
+	// So a comment read checks BOTH: the parent task's deleted_at through the
+	// join, and the comment's own. The join is also where org_id is checked, and
+	// it closes a latent gap this query had before Chapter 10 touched it: it
+	// filtered by task_id alone, so an org member who knew another org's task id
+	// could read its comments.
 	// INSERT ... SELECT, not VALUES, so the org owns the project or nothing is
 	// written.
 	//
@@ -100,6 +102,10 @@ type Querier interface {
 	CreateWebhook(ctx context.Context, arg CreateWebhookParams) (Webhook, error)
 	FindUserIDByEmail(ctx context.Context, lower string) (uuid.UUID, error)
 	GetAttachmentByID(ctx context.Context, arg GetAttachmentByIDParams) (Attachment, error)
+	// Scoped through the parent task's org, the same join every other comment
+	// query uses. The service reads this BEFORE an edit or a delete, because both
+	// decisions need the author id and neither can be made from the request alone.
+	GetCommentByID(ctx context.Context, arg GetCommentByIDParams) (GetCommentByIDRow, error)
 	// Chapter 32 — experiments. The lookup is cached; the assignment insert is the
 	// audit trail and runs off the request's critical path.
 	//
@@ -129,7 +135,7 @@ type Querier interface {
 	InsertAuditEntry(ctx context.Context, arg InsertAuditEntryParams) error
 	ListAttachmentsByTask(ctx context.Context, arg ListAttachmentsByTaskParams) ([]Attachment, error)
 	ListAuditLog(ctx context.Context, arg ListAuditLogParams) ([]AuditLog, error)
-	ListCommentsByTask(ctx context.Context, arg ListCommentsByTaskParams) ([]Comment, error)
+	ListCommentsByTask(ctx context.Context, arg ListCommentsByTaskParams) ([]ListCommentsByTaskRow, error)
 	ListFeatureFlagOverrides(ctx context.Context, flagName string) ([]FeatureFlagOverride, error)
 	ListFeatureFlags(ctx context.Context) ([]FeatureFlag, error)
 	ListMembers(ctx context.Context, orgID uuid.UUID) ([]ListMembersRow, error)
@@ -163,6 +169,10 @@ type Querier interface {
 	SetExperimentStatus(ctx context.Context, arg SetExperimentStatusParams) error
 	SetFeatureFlagDefault(ctx context.Context, arg SetFeatureFlagDefaultParams) error
 	SetUserPreferences(ctx context.Context, arg SetUserPreferencesParams) error
+	// No author_id here, unlike UpdateComment: an org admin may delete a comment
+	// they did not write (moderation), so the caller check cannot live in the SQL.
+	// The service decides, and :execrows lets it tell "not yours" from "not there".
+	SoftDeleteComment(ctx context.Context, arg SoftDeleteCommentParams) (int64, error)
 	SoftDeleteProject(ctx context.Context, arg SoftDeleteProjectParams) (int64, error)
 	SoftDeleteTask(ctx context.Context, arg SoftDeleteTaskParams) (int64, error)
 	// The cascade a project's soft delete performs explicitly, in the same
@@ -180,6 +190,11 @@ type Querier interface {
 	// comments don't (see the migration's header) — their visibility, and now
 	// whether a task can receive a new one, follows tasks.deleted_at instead.
 	TaskInOrg(ctx context.Context, arg TaskInOrgParams) (bool, error)
+	// The author_id in the WHERE clause is the authorisation, not just a filter.
+	// The service checks it too and returns a clearer error, but repeating it here
+	// means no future caller can edit somebody else's words by reaching the repo
+	// directly — the same argument as CreateTask's INSERT ... SELECT.
+	UpdateComment(ctx context.Context, arg UpdateCommentParams) (UpdateCommentRow, error)
 	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
 	UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error)
 	UpsertOrgFlagOverride(ctx context.Context, arg UpsertOrgFlagOverrideParams) error

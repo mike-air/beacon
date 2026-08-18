@@ -27,7 +27,16 @@ import {
   userSchema,
   webhookSchema,
 } from "./parsers";
-import type { AttachmentEnvelope, Preferences, Project, Role, Task, TaskStatus, User } from "./types";
+import type {
+  AttachmentEnvelope,
+  Comment,
+  Preferences,
+  Project,
+  Role,
+  Task,
+  TaskStatus,
+  User,
+} from "./types";
 
 type Page = { limit?: number; offset?: number };
 
@@ -172,6 +181,22 @@ export const tasks = {
     unwrap(beacon.createComment({ path: { orgID, projectID, taskID }, body })).then(
       parser(commentSchema, "Comment"),
     ),
+
+  /** Only the author may edit. Anyone else gets 403 not_comment_author. */
+  editComment: (
+    orgID: string,
+    projectID: string,
+    taskID: string,
+    commentID: string,
+    body: { body: string },
+  ): Promise<Comment> =>
+    unwrap(beacon.updateComment({ path: { orgID, projectID, taskID, commentID }, body })).then(
+      parser(commentSchema, "Comment"),
+    ),
+
+  /** The author, or an org admin/owner. Anyone else gets 403. */
+  removeComment: (orgID: string, projectID: string, taskID: string, commentID: string) =>
+    unwrap(beacon.deleteComment({ path: { orgID, projectID, taskID, commentID } })),
 
   attachments: (orgID: string, projectID: string, taskID: string) =>
     unwrap(beacon.listAttachments({ path: { orgID, projectID, taskID } })).then(

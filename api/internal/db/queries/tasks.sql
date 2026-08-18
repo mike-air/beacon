@@ -10,11 +10,13 @@
 -- projects.sql does it — see that file's header — even though every query
 -- here already guarantees it is NULL.
 --
--- Comments have no deleted_at of their own (see the migration's header for
--- why); ListCommentsByTask instead joins tasks and checks it there, which is
--- also where it now checks org_id — that join closes a latent gap this query
--- had before Chapter 10 touched it: it filtered by task_id alone, so an org
--- member who knew another org's task id could read its comments.
+-- Comments now have a deleted_at of their own — 0010 added it along with the
+-- DELETE endpoint whose absence was 0009's stated reason for withholding one.
+-- So a comment read checks BOTH: the parent task's deleted_at through the
+-- join, and the comment's own. The join is also where org_id is checked, and
+-- it closes a latent gap this query had before Chapter 10 touched it: it
+-- filtered by task_id alone, so an org member who knew another org's task id
+-- could read its comments.
 
 -- name: CreateTask :one
 -- INSERT ... SELECT, not VALUES, so the org owns the project or nothing is
@@ -85,11 +87,47 @@ WHERE project_id = $1 AND deleted_at IS NULL;
 -- name: CreateComment :one
 INSERT INTO comments (task_id, author_id, body)
 VALUES ($1, $2, $3)
-RETURNING id, task_id, author_id, body, created_at;
+RETURNING id, task_id, author_id, body, created_at, updated_at, deleted_at;
 
 -- name: ListCommentsByTask :many
-SELECT comments.id, comments.task_id, comments.author_id, comments.body, comments.created_at
+SELECT comments.id, comments.task_id, comments.author_id, comments.body,
+       comments.created_at, comments.updated_at, comments.deleted_at
 FROM comments
 JOIN tasks ON tasks.id = comments.task_id
-WHERE comments.task_id = $1 AND tasks.org_id = $2 AND tasks.deleted_at IS NULL
+WHERE comments.task_id = $1 AND tasks.org_id = $2
+  AND tasks.deleted_at IS NULL AND comments.deleted_at IS NULL
 ORDER BY comments.created_at ASC;
+
+-- name: GetCommentByID :one
+-- Scoped through the parent task's org, the same join every other comment
+-- query uses. The service reads this BEFORE an edit or a delete, because both
+-- decisions need the author id and neither can be made from the request alone.
+SELECT comments.id, comments.task_id, comments.author_id, comments.body,
+       comments.created_at, comments.updated_at, comments.deleted_at
+FROM comments
+JOIN tasks ON tasks.id = comments.task_id
+WHERE comments.id = $1 AND tasks.org_id = $2
+  AND tasks.deleted_at IS NULL AND comments.deleted_at IS NULL;
+
+-- name: UpdateComment :one
+-- The author_id in the WHERE clause is the authorisation, not just a filter.
+-- The service checks it too and returns a clearer error, but repeating it here
+-- means no future caller can edit somebody else's words by reaching the repo
+-- directly — the same argument as CreateTask's INSERT ... SELECT.
+UPDATE comments SET body = $4, updated_at = now()
+FROM tasks
+WHERE comments.id = $1 AND comments.task_id = tasks.id
+  AND tasks.org_id = $2 AND comments.author_id = $3
+  AND tasks.deleted_at IS NULL AND comments.deleted_at IS NULL
+RETURNING comments.id, comments.task_id, comments.author_id, comments.body,
+          comments.created_at, comments.updated_at, comments.deleted_at;
+
+-- name: SoftDeleteComment :execrows
+-- No author_id here, unlike UpdateComment: an org admin may delete a comment
+-- they did not write (moderation), so the caller check cannot live in the SQL.
+-- The service decides, and :execrows lets it tell "not yours" from "not there".
+UPDATE comments SET deleted_at = now()
+FROM tasks
+WHERE comments.id = $1 AND comments.task_id = tasks.id
+  AND tasks.org_id = $2
+  AND tasks.deleted_at IS NULL AND comments.deleted_at IS NULL;
