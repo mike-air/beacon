@@ -17,8 +17,31 @@
 -- member who knew another org's task id could read its comments.
 
 -- name: CreateTask :one
+-- INSERT ... SELECT, not VALUES, so the org owns the project or nothing is
+-- written.
+--
+-- The plain VALUES form checked two foreign keys independently — org_id names
+-- a real org, project_id names a real project — and never that the two belong
+-- together. A member of org A could therefore POST a task to org B's project
+-- id and have it accepted: the row landed with A's org_id and B's project_id.
+-- It leaked no data (every read here is scoped by org_id, so B never saw it
+-- and A never saw B's tasks), but it let one tenant write rows referencing
+-- another tenant's project, and it made the endpoint an existence oracle for
+-- project ids.
+--
+-- The guard belongs here rather than in a handler for the same reason the rest
+-- of the org scoping does: a SELECT that finds no matching project inserts no
+-- row, atomically, on every path that reaches this query — the single-task
+-- create and the bulk import both — with no extra round trip and nothing for a
+-- future caller to forget. sqlc's :one then returns pgx.ErrNoRows, which the
+-- repo maps to ErrNotFound: from outside, a project you cannot write to is
+-- indistinguishable from one that does not exist, which is the right answer.
 INSERT INTO tasks (org_id, project_id, title, status, position)
-VALUES ($1, $2, $3, $4, $5)
+SELECT $1, $2, $3, $4, $5
+FROM projects
+WHERE projects.id = $2
+  AND projects.org_id = $1
+  AND projects.deleted_at IS NULL
 RETURNING id, org_id, project_id, title, status, position, created_at, updated_at, deleted_at;
 
 -- name: ListTasksByProject :many
@@ -39,6 +62,14 @@ WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL;
 UPDATE tasks SET title = $3, status = $4, position = $5, updated_at = now()
 WHERE id = $1 AND org_id = $2 AND deleted_at IS NULL
 RETURNING id, org_id, project_id, title, status, position, created_at, updated_at, deleted_at;
+
+-- name: MaxTaskPosition :one
+-- The highest position currently in a project, for appending imported tasks
+-- after the existing cards. COALESCE makes an empty project answer 0 rather
+-- than NULL, so the caller gets a float64 and not a null-handling branch.
+SELECT COALESCE(MAX(position), 0)::float8
+FROM tasks
+WHERE org_id = $1 AND project_id = $2 AND deleted_at IS NULL;
 
 -- name: SoftDeleteTask :execrows
 UPDATE tasks SET deleted_at = now()

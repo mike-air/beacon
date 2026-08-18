@@ -40,6 +40,14 @@ import (
 var (
 	ErrNotFound      = errors.New("task not found")
 	ErrInvalidStatus = errors.New("invalid task status")
+	// ErrProjectNotFound is returned by the create paths when the project
+	// does not exist in the caller's org — including when it exists in
+	// somebody else's. CreateTask's INSERT ... SELECT writes no row in that
+	// case; see internal/db/queries/tasks.sql for why the check lives there.
+	// Deliberately the same answer for "no such project" and "not yours":
+	// a tenant should not be able to use this endpoint to learn that another
+	// tenant's project id is real.
+	ErrProjectNotFound = errors.New("project not found")
 )
 
 // Valid task statuses (matches the CHECK constraint in 0001_init.up.sql).
@@ -129,6 +137,12 @@ func (r *Repo) Create(ctx context.Context, orgID, projectID, title, status strin
 		Position:  position,
 	})
 	if err != nil {
+		// No rows means the SELECT found no project with this id in this org
+		// — it does not exist, or it belongs to somebody else. Both answer
+		// ErrProjectNotFound; the query's header explains why they must.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return Task{}, ErrProjectNotFound
+		}
 		return Task{}, fmt.Errorf("tasks.Create: %w", err)
 	}
 	return toTask(t), nil

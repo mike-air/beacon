@@ -162,6 +162,26 @@ func TestCrossTenantIsolation(t *testing.T) {
 		t.Errorf("B deleting A's task: err = %v, want ErrNotFound", err)
 	}
 
+	// --- Create: B cannot write INTO A's project ---
+	//
+	// This case was missing until bulk import went in, and it was the one the
+	// boundary actually failed. Read, update and delete were all covered
+	// above; create was not, and CreateTask's old VALUES form checked that
+	// org_id and project_id each existed without ever checking they belonged
+	// together. B could therefore create a task carrying B's org_id and A's
+	// project_id. No data leaked — every read here is org-scoped, so neither
+	// side saw the other's rows — but one tenant could write rows referencing
+	// another's project, and could tell a real project id from a fake one by
+	// whether the call succeeded.
+	if _, err := taskSvc.Create(ctx, b.orgID, a.projectID, "Planted", tasks.StatusTodo, 1); !errors.Is(err, tasks.ErrProjectNotFound) {
+		t.Errorf("B creating a task in A's project: err = %v, want ErrProjectNotFound", err)
+	}
+	// The bulk path must not be a way around the same boundary.
+	planted := []tasks.ImportRow{{Title: "Planted in bulk", Status: tasks.StatusTodo}}
+	if _, err := taskSvc.Import(ctx, b.orgID, a.projectID, b.ownerID, planted); !errors.Is(err, tasks.ErrProjectNotFound) {
+		t.Errorf("B importing into A's project: err = %v, want ErrProjectNotFound", err)
+	}
+
 	// --- The boundary held: A's data is untouched ---
 	stillThere, err := taskSvc.Get(ctx, a.orgID, aTask.ID)
 	if err != nil {

@@ -79,6 +79,66 @@ test("a wrong password is reported, not swallowed", async ({ page }) => {
   await page.getByLabel("Email").fill(freshEmail("nobody"));
   await page.getByLabel("Password").fill(PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("alert")).toBeVisible({ timeout: 10_000 });
+  const alert = page.getByRole("alert");
+  await expect(alert).toBeVisible({ timeout: 10_000 });
   await expect(page).toHaveURL(/\/sign-in/);
+
+  // What it SAYS, not merely that it appeared.
+  //
+  // This assertion is the whole reason the test is worth having. Until the
+  // unwrap() fix in @beacon/sdk, every failed request in the app surfaced as
+  // "Cannot read properties of undefined (reading 'status')" — the client
+  // crashed while rewrapping an error that was already complete. This test
+  // passed throughout, because an alert was visible and it never looked
+  // inside it. A message check is cheap; a message check that only asserts
+  // presence is a test that cannot fail for the reason it exists.
+  await expect(alert).toContainText(/invalid email or password/i);
+  await expect(alert).not.toContainText(/undefined|cannot read/i);
+});
+
+test("a bad CSV import reports every bad row and writes nothing", async ({ page }) => {
+  const { token } = await asSignedIn(page);
+  const { projectID } = await seedBoard(token, `CSV bad ${Date.now()}`);
+  await gotoBoard(page, projectID);
+
+  const before = await page.getByRole("button", { name: /^Open "/ }).count();
+
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page
+    .getByLabel("CSV")
+    .fill("title,status\nFine row,todo\nBroken row,nonsense\n");
+  await page.getByRole("dialog").getByRole("button", { name: "Import" }).click();
+
+  // The failure names the line and the column, because "import failed" would
+  // leave the user opening their spreadsheet to guess which of 200 rows.
+  const alert = page.getByRole("alert");
+  await expect(alert).toBeVisible({ timeout: 10_000 });
+  await expect(alert).toContainText(/nothing was written/i);
+  await expect(alert).toContainText(/line 3/);
+  await expect(alert).toContainText(/status/);
+
+  // All-or-nothing is the promise; this is the half a unit test cannot make.
+  // The valid row on line 2 must NOT have landed.
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("button", { name: /^Open "/ })).toHaveCount(before);
+  await expect(page.getByRole("button", { name: 'Open "Fine row"' })).toHaveCount(0);
+});
+
+test("a good CSV import puts every row on the board", async ({ page }) => {
+  const { token } = await asSignedIn(page);
+  const { projectID } = await seedBoard(token, `CSV good ${Date.now()}`);
+  await gotoBoard(page, projectID);
+
+  await page.getByRole("button", { name: "Import", exact: true }).click();
+  await page
+    .getByLabel("CSV")
+    .fill("title,status\nImported todo,todo\nImported doing,in_progress\n");
+  await page.getByRole("dialog").getByRole("button", { name: "Import" }).click();
+
+  // Each row lands in the column its status names, not all in the first one.
+  await expect(page.getByRole("button", { name: 'Open "Imported todo"' })).toBeVisible({
+    timeout: 10_000,
+  });
+  await expect(page.getByRole("button", { name: 'Open "Imported doing"' })).toBeVisible();
+  await expect(page.getByRole("region", { name: "In progress" })).toContainText("Imported doing");
 });

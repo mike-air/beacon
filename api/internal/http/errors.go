@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/go-playground/validator/v10"
@@ -51,7 +52,7 @@ func classify(err error) (status int, code, message string, fields []fieldError,
 	// 404 — not found.
 	case errors.Is(err, tasks.ErrNotFound):
 		return http.StatusNotFound, "task_not_found", "task not found", nil, true
-	case errors.Is(err, projects.ErrNotFound):
+	case errors.Is(err, projects.ErrNotFound), errors.Is(err, tasks.ErrProjectNotFound):
 		return http.StatusNotFound, "project_not_found", "project not found", nil, true
 	case errors.Is(err, orgs.ErrNotFound):
 		return http.StatusNotFound, "org_not_found", "organization not found", nil, true
@@ -84,6 +85,12 @@ func classify(err error) (status int, code, message string, fields []fieldError,
 	case errors.Is(err, tasks.ErrInvalidStatus):
 		return http.StatusUnprocessableEntity, "invalid_status",
 			"status must be one of: todo, in_progress, done", nil, true
+	case errors.Is(err, tasks.ErrNoRows):
+		return http.StatusUnprocessableEntity, "import_empty",
+			"the file has no rows to import", nil, true
+	case errors.Is(err, tasks.ErrTooManyRows):
+		return http.StatusUnprocessableEntity, "import_too_large",
+			tasks.ErrTooManyRows.Error(), nil, true
 
 	// 401 — bad credentials / token.
 	case errors.Is(err, users.ErrInvalidCredentials):
@@ -94,6 +101,29 @@ func classify(err error) (status int, code, message string, fields []fieldError,
 
 	return http.StatusInternalServerError, "internal_error",
 		"something went wrong on our end", nil, false
+}
+
+// importRowError renders a bulk import's per-row failures through the normal
+// error envelope, in its rows field.
+//
+// It does not go through classify: classify maps ONE error to one status, and
+// this is a list of independent row failures that all share a status. Building
+// the envelope directly keeps classify's contract intact rather than teaching
+// it to carry a slice.
+func (s *Server) importRowError(rows []tasks.RowError) error {
+	noun := "rows"
+	if len(rows) == 1 {
+		noun = "row"
+	}
+	return &humaError{
+		status: http.StatusUnprocessableEntity,
+		Body: errorBody{
+			Code: "import_invalid",
+			Message: fmt.Sprintf("%d %s could not be imported; nothing was written",
+				len(rows), noun),
+			Rows: rows,
+		},
+	}
 }
 
 // handleError is the chi path: classify, then write.

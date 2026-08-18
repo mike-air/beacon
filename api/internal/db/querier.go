@@ -63,6 +63,25 @@ type Querier interface {
 	// also where it now checks org_id — that join closes a latent gap this query
 	// had before Chapter 10 touched it: it filtered by task_id alone, so an org
 	// member who knew another org's task id could read its comments.
+	// INSERT ... SELECT, not VALUES, so the org owns the project or nothing is
+	// written.
+	//
+	// The plain VALUES form checked two foreign keys independently — org_id names
+	// a real org, project_id names a real project — and never that the two belong
+	// together. A member of org A could therefore POST a task to org B's project
+	// id and have it accepted: the row landed with A's org_id and B's project_id.
+	// It leaked no data (every read here is scoped by org_id, so B never saw it
+	// and A never saw B's tasks), but it let one tenant write rows referencing
+	// another tenant's project, and it made the endpoint an existence oracle for
+	// project ids.
+	//
+	// The guard belongs here rather than in a handler for the same reason the rest
+	// of the org scoping does: a SELECT that finds no matching project inserts no
+	// row, atomically, on every path that reaches this query — the single-task
+	// create and the bulk import both — with no extra round trip and nothing for a
+	// future caller to forget. sqlc's :one then returns pgx.ErrNoRows, which the
+	// repo maps to ErrNotFound: from outside, a project you cannot write to is
+	// indistinguishable from one that does not exist, which is the right answer.
 	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
 	// Users — identity. The one table with no org_id. (Chapter 8 / sqlc)
 	CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error)
@@ -124,6 +143,10 @@ type Querier interface {
 	ListWebhooksByOrg(ctx context.Context, orgID uuid.UUID) ([]Webhook, error)
 	MarkDeliveryStatus(ctx context.Context, arg MarkDeliveryStatusParams) error
 	MarkDeliverySuccess(ctx context.Context, arg MarkDeliverySuccessParams) error
+	// The highest position currently in a project, for appending imported tasks
+	// after the existing cards. COALESCE makes an empty project answer 0 rather
+	// than NULL, so the caller gets a float64 and not a null-handling branch.
+	MaxTaskPosition(ctx context.Context, arg MaxTaskPositionParams) (float64, error)
 	// Chapter 29 — the tenant-scoped full-text query.
 	//
 	// Four functions carry it. plainto_tsquery turns the user's words into a

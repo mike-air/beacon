@@ -133,6 +133,22 @@ export const tasks = {
       parser(taskSchema, "Task"),
     ),
 
+  /**
+   * Create many tasks from CSV text, in one transaction.
+   *
+   * The server writes all of them or none: a single bad row fails the call
+   * and leaves the board untouched, with the offending lines in the error's
+   * `rows`. See importRowError in the API for that shape.
+   */
+  importCSV: (orgID: string, projectID: string, csv: string): Promise<Task[]> =>
+    unwrap(beacon.importTasks({ path: { orgID, projectID }, body: { csv } })).then((r) =>
+      // The generated type allows a null list. The server never sends one —
+      // a successful import wrote at least one row — but the claim is the
+      // spec's, not a guarantee, so this treats absent as empty rather than
+      // asserting it away.
+      (r.tasks ?? []).map(parser(taskSchema, "Task")),
+    ),
+
   /** A full replacement of the mutable fields — title and status are both required. */
   update: (
     orgID: string,

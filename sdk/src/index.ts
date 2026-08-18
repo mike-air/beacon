@@ -31,7 +31,7 @@ import { client } from "./generated/client.gen";
 
 export { configureBeacon, resetSessionState, type BeaconConfig } from "./client";
 export { BeaconError, NetworkError } from "./errors";
-import { BeaconError } from "./errors";
+import { BeaconError, NetworkError } from "./errors";
 
 /**
  * The SDK instance.
@@ -52,19 +52,35 @@ export { Sdk };
  * which is a sound default for a library and the wrong shape for a UI: React
  * Query, error boundaries and try/catch all speak exceptions.
  *
- * The fetch wrapper has already converted a failed response into a thrown
- * BeaconError, so `error` here is only populated in the cases it did not
- * handle — which is why this still guards rather than assuming.
+ * The error branch below is the ONLY one that runs on a failed request, which
+ * is the opposite of what this function assumed until a bulk import made it
+ * obvious. The old comment here reasoned that the fetch wrapper throws a
+ * BeaconError, so `error` would be populated only in cases it had not
+ * handled. In fact the generated client catches whatever the fetch layer
+ * throws and hands it straight back as `error` — with NO `response`, because
+ * there was no response to report. So this branch ran on every failure, read
+ * `response.status` off undefined, and turned every error in the application
+ * into "Cannot read properties of undefined (reading 'status')".
+ *
+ * The fix is to stop rewrapping. Our fetch wrapper already built a complete
+ * BeaconError: status, the stable `code`, the message, the field errors and
+ * the per-row import errors. Constructing a second one on top could only
+ * throw that detail away even when it did not crash.
  */
 export async function unwrap<T>(
-  call: Promise<{ data?: T; error?: unknown; response: Response }>,
+  call: Promise<{ data?: T; error?: unknown; response?: Response }>,
 ): Promise<T> {
   const { data, error, response } = await call;
   if (error !== undefined) {
+    // Already the error we want: rethrow it untouched.
+    if (error instanceof BeaconError || error instanceof NetworkError) throw error;
+
+    // Something the fetch wrapper did not produce. `response` may or may not
+    // exist here, so this cannot assume it — assuming it is what broke.
     throw new BeaconError({
-      status: response.status,
-      code: `http_${response.status}`,
-      message: response.statusText || "Request failed",
+      status: response?.status ?? 0,
+      code: response ? `http_${response.status}` : "client_error",
+      message: response?.statusText || "Request failed",
     });
   }
   return data as T;

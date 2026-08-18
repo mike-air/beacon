@@ -18,6 +18,7 @@ package http
 import (
 	"context"
 	"net/http"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 
@@ -45,6 +46,37 @@ type CreateTaskInput struct {
 		// A float so a card can be inserted between two others without
 		// renumbering the column.
 		Position float64 `json:"position,omitempty"`
+	}
+}
+
+// ImportTasksInput carries the CSV as a string rather than a multipart upload.
+//
+// This API's contract is generated from these structs, and a typed string
+// field survives that trip intact — the SDK gets `csv: string` and the web
+// client reads the file and sends its text. A multipart endpoint would be the
+// one operation the generated client could not describe, which is a high price
+// for saving the caller a FileReader.
+type ImportTasksInput struct {
+	ProjectPath
+	IdempotencyHeader
+	Body struct {
+		CSV string `json:"csv" minLength:"1" required:"true" doc:"CSV text with a title column, optionally status and position"`
+	}
+}
+
+// ImportTasksOutput reports what landed. There is no partial-success shape
+// here on purpose: the import is all-or-nothing, so either every row is in
+// Tasks or the call failed and this body was never written.
+//
+// Row-level failures come back through the ordinary error envelope, in its
+// rows field — not a second response shape. humaapi.go explains why this API
+// has exactly one error shape; an import is not special enough to be the
+// exception a client has to special-case.
+type ImportTasksOutput struct {
+	Status int
+	Body   struct {
+		Imported int          `json:"imported"`
+		Tasks    []tasks.Task `json:"tasks"`
 	}
 }
 
@@ -163,6 +195,47 @@ func (s *Server) registerTasks(api huma.API, g gates) {
 		}
 		s.notifyTaskEvent(ctx, in.OrgID, eventTaskCreated, t)
 		return &TaskOutput{Status: http.StatusCreated, Body: t}, nil
+	})
+
+	huma.Register(api, huma.Operation{
+		OperationID: "import-tasks",
+		Method:      http.MethodPost,
+		Path:        "/v1/orgs/{orgID}/projects/{projectID}/tasks/import",
+		Summary:     "Import tasks from CSV",
+		Description: "Creates many tasks in one transaction from CSV text. " +
+			"The CSV needs a title column; status and position are optional. " +
+			"If any row is invalid nothing is written and the response lists " +
+			"every bad row, so one upload reports every problem at once.",
+		Tags:          []string{"tasks"},
+		Security:      sec,
+		DefaultStatus: http.StatusCreated,
+		Middlewares:   g.orgScoped,
+	}, func(ctx context.Context, in *ImportTasksInput) (*ImportTasksOutput, error) {
+		rows, rowErrs, err := tasks.ParseCSV(strings.NewReader(in.Body.CSV))
+		if err != nil {
+			return nil, s.asHumaError(ctx, err)
+		}
+		if len(rowErrs) > 0 {
+			return nil, s.importRowError(rowErrs)
+		}
+
+		userID, _ := auth.UserIDFrom(ctx)
+		created, err := s.tasks.Import(ctx, in.OrgID, in.ProjectID, userID, rows)
+		if err != nil {
+			return nil, s.asHumaError(ctx, err)
+		}
+
+		// One event per task, same as if they had been created one at a time:
+		// a board open in another tab should end up in the same state either
+		// way, and the client already knows how to apply this event.
+		for _, t := range created {
+			s.notifyTaskEvent(ctx, in.OrgID, eventTaskCreated, t)
+		}
+
+		out := &ImportTasksOutput{Status: http.StatusCreated}
+		out.Body.Imported = len(created)
+		out.Body.Tasks = created
+		return out, nil
 	})
 
 	huma.Register(api, huma.Operation{

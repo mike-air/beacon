@@ -2,7 +2,7 @@
 
 import type { Client, Options as Options2, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddMemberData, AddMemberErrors, AddMemberResponses, CreateAttachmentData, CreateAttachmentErrors, CreateAttachmentResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateOrgData, CreateOrgErrors, CreateOrgResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateTaskData, CreateTaskErrors, CreateTaskResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteTaskData, DeleteTaskErrors, DeleteTaskResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EventsData, EventsErrors, EventsResponses, GetAttachmentData, GetAttachmentErrors, GetAttachmentResponses, GetMeData, GetMeErrors, GetMeResponses, GetPreferencesData, GetPreferencesErrors, GetPreferencesResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetTaskData, GetTaskErrors, GetTaskResponses, ListAttachmentsData, ListAttachmentsErrors, ListAttachmentsResponses, ListAuditLogData, ListAuditLogErrors, ListAuditLogResponses, ListCommentsData, ListCommentsErrors, ListCommentsResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListOrgsData, ListOrgsErrors, ListOrgsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListTasksData, ListTasksErrors, ListTasksResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, LoginData, LoginErrors, LoginResponses, RegisterWebhookData, RegisterWebhookErrors, RegisterWebhookResponses, SearchData, SearchErrors, SearchResponses, SetPreferencesData, SetPreferencesErrors, SetPreferencesResponses, SignupData, SignupErrors, SignupResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateTaskData, UpdateTaskErrors, UpdateTaskResponses } from './types.gen';
+import type { AddMemberData, AddMemberErrors, AddMemberResponses, CreateAttachmentData, CreateAttachmentErrors, CreateAttachmentResponses, CreateCommentData, CreateCommentErrors, CreateCommentResponses, CreateOrgData, CreateOrgErrors, CreateOrgResponses, CreateProjectData, CreateProjectErrors, CreateProjectResponses, CreateTaskData, CreateTaskErrors, CreateTaskResponses, DeleteProjectData, DeleteProjectErrors, DeleteProjectResponses, DeleteTaskData, DeleteTaskErrors, DeleteTaskResponses, DeleteWebhookData, DeleteWebhookErrors, DeleteWebhookResponses, EventsData, EventsErrors, EventsResponses, GetAttachmentData, GetAttachmentErrors, GetAttachmentResponses, GetMeData, GetMeErrors, GetMeResponses, GetPreferencesData, GetPreferencesErrors, GetPreferencesResponses, GetProjectData, GetProjectErrors, GetProjectResponses, GetTaskData, GetTaskErrors, GetTaskResponses, ImportTasksData, ImportTasksErrors, ImportTasksResponses, ListAttachmentsData, ListAttachmentsErrors, ListAttachmentsResponses, ListAuditLogData, ListAuditLogErrors, ListAuditLogResponses, ListCommentsData, ListCommentsErrors, ListCommentsResponses, ListMembersData, ListMembersErrors, ListMembersResponses, ListOrgsData, ListOrgsErrors, ListOrgsResponses, ListProjectsData, ListProjectsErrors, ListProjectsResponses, ListTasksData, ListTasksErrors, ListTasksResponses, ListWebhooksData, ListWebhooksErrors, ListWebhooksResponses, LoginData, LoginErrors, LoginResponses, RegisterWebhookData, RegisterWebhookErrors, RegisterWebhookResponses, SearchData, SearchErrors, SearchResponses, SetPreferencesData, SetPreferencesErrors, SetPreferencesResponses, SignupData, SignupErrors, SignupResponses, UpdateProjectData, UpdateProjectErrors, UpdateProjectResponses, UpdateTaskData, UpdateTaskErrors, UpdateTaskResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean> = Options2<TData, ThrowOnError> & {
     /**
@@ -291,6 +291,23 @@ export class Sdk extends HeyApiClient {
         return (options.client ?? this.client).post<CreateTaskResponses, CreateTaskErrors, ThrowOnError>({
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/v1/orgs/{orgID}/projects/{projectID}/tasks',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Import tasks from CSV
+     *
+     * Creates many tasks in one transaction from CSV text. The CSV needs a title column; status and position are optional. If any row is invalid nothing is written and the response lists every bad row, so one upload reports every problem at once.
+     */
+    public importTasks<ThrowOnError extends boolean = false>(options: Options<ImportTasksData, ThrowOnError>) {
+        return (options.client ?? this.client).post<ImportTasksResponses, ImportTasksErrors, ThrowOnError>({
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/v1/orgs/{orgID}/projects/{projectID}/tasks/import',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

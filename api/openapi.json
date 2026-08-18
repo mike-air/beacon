@@ -221,6 +221,12 @@
           },
           "message": {
             "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/RowError"
+            },
+            "type": "array"
           }
         },
         "required": [
@@ -286,6 +292,43 @@
         },
         "required": [
           "error"
+        ],
+        "type": "object"
+      },
+      "ImportTasksInputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "csv": {
+            "description": "CSV text with a title column, optionally status and position",
+            "minLength": 1,
+            "type": "string"
+          }
+        },
+        "required": [
+          "csv"
+        ],
+        "type": "object"
+      },
+      "ImportTasksOutputBody": {
+        "additionalProperties": false,
+        "properties": {
+          "imported": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "tasks": {
+            "items": {
+              "$ref": "#/components/schemas/Task"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "imported",
+          "tasks"
         ],
         "type": "object"
       },
@@ -777,6 +820,26 @@
         },
         "required": [
           "url"
+        ],
+        "type": "object"
+      },
+      "RowError": {
+        "additionalProperties": false,
+        "properties": {
+          "column": {
+            "type": "string"
+          },
+          "line": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "line",
+          "message"
         ],
         "type": "object"
       },
@@ -2103,6 +2166,86 @@
           }
         ],
         "summary": "Create a task",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/v1/orgs/{orgID}/projects/{projectID}/tasks/import": {
+      "post": {
+        "description": "Creates many tasks in one transaction from CSV text. The CSV needs a title column; status and position are optional. If any row is invalid nothing is written and the response lists every bad row, so one upload reports every problem at once.",
+        "operationId": "import-tasks",
+        "parameters": [
+          {
+            "description": "The organisation",
+            "in": "path",
+            "name": "orgID",
+            "required": true,
+            "schema": {
+              "description": "The organisation",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The project",
+            "in": "path",
+            "name": "projectID",
+            "required": true,
+            "schema": {
+              "description": "The project",
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Repeating a request with the same key replays the original response instead of performing the write twice.",
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "description": "Repeating a request with the same key replays the original response instead of performing the write twice.",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportTasksInputBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportTasksOutputBody"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HumaError"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Import tasks from CSV",
         "tags": [
           "tasks"
         ]

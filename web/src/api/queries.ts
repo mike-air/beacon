@@ -152,6 +152,14 @@ export function useCreateTask(orgID: string, projectID: string) {
   });
 }
 
+export function useImportTasks(orgID: string, projectID: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (csv: string) => tasks.importCSV(orgID, projectID, csv),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.tasks(orgID, projectID) }),
+  });
+}
+
 /** Everything about one org, after an event that could have changed anything. */
 export function invalidateOrg(qc: QueryClient, orgID: string) {
   void qc.invalidateQueries({ queryKey: keys.org(orgID) });

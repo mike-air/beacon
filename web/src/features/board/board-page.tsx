@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/toast";
 import { cn } from "@/lib/cn";
 import { useOrgContext } from "@/features/org/org-gate";
+import { ImportTasks } from "./import-tasks";
 import { TaskCard } from "./task-card";
 import { TaskDetail } from "./task-detail";
 import { GAP, needsRebalance, positionAt } from "./position";
@@ -157,6 +158,7 @@ export function BoardPage() {
         <span className="font-mono text-label text-ink-faint">
           {items.length} {items.length === 1 ? "task" : "tasks"}
         </span>
+        <ImportTasks projectID={projectID} />
       </div>
 
       {query.isPending && (

@@ -73,6 +73,7 @@ export type ErrorBody = {
     code: string;
     fields?: Array<FieldError>;
     message: string;
+    rows?: Array<RowError>;
 };
 
 export type FieldError = {
@@ -91,6 +92,18 @@ export type Hit = {
 
 export type HumaError = {
     error: ErrorBody;
+};
+
+export type ImportTasksInputBody = {
+    /**
+     * CSV text with a title column, optionally status and position
+     */
+    csv: string;
+};
+
+export type ImportTasksOutputBody = {
+    imported: number;
+    tasks: Array<Task> | null;
 };
 
 export type ListBodyAttachment = {
@@ -222,6 +235,12 @@ export type RegisterWebhookInputBody = {
      */
     events?: Array<string> | null;
     url: string;
+};
+
+export type RowError = {
+    column?: string;
+    line: number;
+    message: string;
 };
 
 export type SearchResult = {
@@ -882,6 +901,46 @@ export type CreateTaskResponses = {
 };
 
 export type CreateTaskResponse = CreateTaskResponses[keyof CreateTaskResponses];
+
+export type ImportTasksData = {
+    body: ImportTasksInputBody;
+    headers?: {
+        /**
+         * Repeating a request with the same key replays the original response instead of performing the write twice.
+         */
+        'Idempotency-Key'?: string;
+    };
+    path: {
+        /**
+         * The organisation
+         */
+        orgID: string;
+        /**
+         * The project
+         */
+        projectID: string;
+    };
+    query?: never;
+    url: '/v1/orgs/{orgID}/projects/{projectID}/tasks/import';
+};
+
+export type ImportTasksErrors = {
+    /**
+     * Error
+     */
+    default: HumaError;
+};
+
+export type ImportTasksError = ImportTasksErrors[keyof ImportTasksErrors];
+
+export type ImportTasksResponses = {
+    /**
+     * Created
+     */
+    201: ImportTasksOutputBody;
+};
+
+export type ImportTasksResponse = ImportTasksResponses[keyof ImportTasksResponses];
 
 export type DeleteTaskData = {
     body?: never;

@@ -147,15 +147,20 @@ async function toBeaconError(res: Response): Promise<BeaconError> {
   let code = `http_${res.status}`;
   let message = res.statusText || "Request failed";
   let fields;
+  let rows;
 
   try {
     const body = (await res.clone().json()) as {
-      error?: { code?: string; message?: string; fields?: [] };
+      error?: { code?: string; message?: string; fields?: []; rows?: [] };
     };
     if (body.error) {
       code = body.error.code ?? code;
       message = body.error.message ?? message;
       fields = body.error.fields;
+      // Carried for the same reason as fields: a bulk import's per-row
+      // failures are the useful part of its error, and dropping them here
+      // would leave the uploader with a count and no way to say which lines.
+      rows = body.error.rows;
     }
   } catch {
     // A non-JSON error body — a proxy's HTML 502, say. The status is still true.
@@ -166,6 +171,7 @@ async function toBeaconError(res: Response): Promise<BeaconError> {
     code,
     message,
     fields,
+    rows,
     ...(retryAfter !== undefined && Number.isFinite(retryAfter) ? { retryAfter } : {}),
     ...(requestId ? { requestId } : {}),
   });

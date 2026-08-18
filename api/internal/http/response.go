@@ -3,6 +3,8 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+
+	"beacon/internal/tasks"
 )
 
 // A single, predictable JSON error shape for the whole API:
@@ -20,6 +22,12 @@ type errorBody struct {
 	// Fields carries per-field detail for validation failures (422). It is
 	// omitted for every other error so the common shape stays unchanged.
 	Fields []fieldError `json:"fields,omitempty" nullable:"false"`
+	// Rows carries per-row detail for a bulk import that failed validation
+	// (422), and is omitted everywhere else for the same reason Fields is.
+	// It exists so a CSV's problems arrive as a list the uploader can render
+	// against their file, instead of prose a client would have to re-parse to
+	// rebuild the same list.
+	Rows []tasks.RowError `json:"rows,omitempty" nullable:"false"`
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {

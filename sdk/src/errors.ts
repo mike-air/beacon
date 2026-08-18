@@ -9,12 +9,18 @@
  * `code` is the stable part of Beacon's error envelope. Branch on it. Never
  * branch on `message` — that is a string a translator will change.
  */
-import type { FieldError } from "./generated";
+import type { FieldError, RowError } from "./generated";
 
 export class BeaconError extends Error {
   readonly status: number;
   readonly code: string;
   readonly fields: FieldError[];
+  /**
+   * Per-row detail from a bulk import that failed validation. Empty for
+   * every other error — only the import endpoint fills it, and it does so
+   * INSTEAD of writing anything, so a non-empty rows means nothing landed.
+   */
+  readonly rows: RowError[];
   /** Seconds, from Retry-After. Only ever set on a 429. */
   readonly retryAfter?: number;
   readonly requestId?: string;
@@ -24,6 +30,7 @@ export class BeaconError extends Error {
     code: string;
     message: string;
     fields?: FieldError[];
+    rows?: RowError[];
     retryAfter?: number;
     requestId?: string;
   }) {
@@ -32,6 +39,7 @@ export class BeaconError extends Error {
     this.status = init.status;
     this.code = init.code;
     this.fields = init.fields ?? [];
+    this.rows = init.rows ?? [];
     this.retryAfter = init.retryAfter;
     this.requestId = init.requestId;
   }
