@@ -49,6 +49,28 @@ make db-up          # start Postgres in Docker
 make run            # migrates on boot, then serves on :8080
 ```
 
+### Overriding config for one run
+
+Configuration comes from the environment (and `.env`). A few settings also take
+a flag, for the times you want one value changed without editing a file you
+will forget to change back. **Precedence is flag > environment > default.**
+
+```bash
+go run ./cmd/beacon-api -help          # the flags, and every env-only setting
+
+go run ./cmd/beacon-api -port 8081 -metrics-port 9091   # a second instance
+go run ./cmd/beacon-api -database-url postgres://beacon:beacon@localhost:5432/scratch?sslmode=disable
+go run ./cmd/beacon-api -env production                 # JWT_SECRET now required
+go run ./cmd/beacon-worker -concurrency 1               # one job at a time
+```
+
+Only the settings you would realistically change while running locally have a
+flag — `Config` has around forty fields, and a `-help` listing all of them is a
+wall nobody reads. Secrets stay environment-only rather than sitting in shell
+history and `ps` output. `beacon-worker` has a smaller set than `beacon-api`,
+because it never reads the HTTP or search settings and a flag that parsed and
+then did nothing would be worse than its absence.
+
 Postgres is the only hard requirement. Everything else degrades cleanly when it
 is not configured — no Redis means the cache is per-process, no `MEILI_URL`
 means search runs on Postgres, no OTLP endpoint means tracing is off. To get the

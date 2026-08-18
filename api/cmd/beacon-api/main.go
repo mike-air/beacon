@@ -14,6 +14,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -34,6 +35,12 @@ import (
 
 func main() {
 	if err := run(); err != nil {
+		// -help is a request that was answered, not a failure. flag has
+		// already printed the usage; exiting 0 keeps `beacon-api -help` from
+		// looking like a broken command in a script.
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
 		log.Fatalf("beacon-api: fatal: %v", err)
 	}
 }
@@ -43,7 +50,9 @@ func run() error {
 	// environment variables and there is no file to load. Missing file is fine.
 	_ = godotenv.Load()
 
-	cfg, err := config.Load()
+	// Flags override the environment for one run; see internal/config/flags.go
+	// for why only a few settings have one.
+	cfg, err := config.LoadAPIFlags(os.Args[1:])
 	if err != nil {
 		return err
 	}

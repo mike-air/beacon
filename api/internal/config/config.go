@@ -105,7 +105,22 @@ const devJWTSecret = "dev-insecure-jwt-secret-change-me"
 
 // Load reads the environment into a Config. It returns an error listing every
 // required variable that is missing, so you fix them all at once.
+//
+// Env only, no flags. LoadWithFlags is the entry point the binaries use; this
+// one stays flag-free so tests (and anything embedding Beacon) can build a
+// Config without a command line existing.
 func Load() (*Config, error) {
+	cfg := fromEnv()
+	if err := cfg.finish(); err != nil {
+		return nil, err
+	}
+	return cfg, nil
+}
+
+// fromEnv fills every field from the environment and its default. It performs
+// NO validation: flags are applied between this and finish(), so a value that
+// arrives only by flag must not have been rejected already.
+func fromEnv() *Config {
 	cfg := &Config{
 		Env:             getEnv("BEACON_ENV", "development"),
 		Port:            getEnv("PORT", "8080"),
@@ -158,27 +173,33 @@ func Load() (*Config, error) {
 		AuthRateLimitRPS:     getFloat("AUTH_RATE_LIMIT_RPS", 5.0/60.0), // 5 per minute
 		AuthRateLimitBurst:   getInt("AUTH_RATE_LIMIT_BURST", 10),
 	}
+	return cfg
+}
 
+// finish applies the derived values and validates. It runs LAST — after any
+// flags — so that a required value supplied only on the command line counts,
+// and so Env being changed by -env is the Env the JWT rule reads.
+func (c *Config) finish() error {
 	var missing []string
-	if cfg.DatabaseURL == "" {
-		missing = append(missing, "DATABASE_URL")
+	if c.DatabaseURL == "" {
+		missing = append(missing, "DATABASE_URL (or -database-url)")
 	}
 	// JWTSecret is mandatory in production; in development we fall back to a
 	// known-insecure default so the service boots without extra setup.
-	if cfg.JWTSecret == "" {
-		if cfg.Env == "production" {
+	if c.JWTSecret == "" {
+		if c.Env == "production" {
 			missing = append(missing, "JWT_SECRET")
 		} else {
-			cfg.JWTSecret = devJWTSecret
+			c.JWTSecret = devJWTSecret
 		}
 	}
-	if cfg.BackupSourceURL == "" {
-		cfg.BackupSourceURL = cfg.DatabaseURL
+	if c.BackupSourceURL == "" {
+		c.BackupSourceURL = c.DatabaseURL
 	}
 	if len(missing) > 0 {
-		return nil, fmt.Errorf("missing required environment variables: %v", missing)
+		return fmt.Errorf("missing required configuration: %v", missing)
 	}
-	return cfg, nil
+	return nil
 }
 
 func (c *Config) IsProduction() bool { return c.Env == "production" }

@@ -15,6 +15,8 @@ package main
 
 import (
 	"context"
+	"errors"
+	"flag"
 	"log"
 	"net/http"
 	"os"
@@ -35,6 +37,10 @@ import (
 
 func main() {
 	if err := run(); err != nil {
+		// -help was answered, not failed. flag already printed the usage.
+		if errors.Is(err, flag.ErrHelp) {
+			return
+		}
 		log.Fatalf("beacon-worker: fatal: %v", err)
 	}
 }
@@ -42,7 +48,7 @@ func main() {
 func run() error {
 	_ = godotenv.Load()
 
-	cfg, err := config.Load()
+	cfg, err := config.LoadWorkerFlags(os.Args[1:])
 	if err != nil {
 		return err
 	}
